@@ -1,4 +1,8 @@
 {
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.arguments": [
+        "--query-driver=**/arm-none-eabi-gcc.exe,**/arm-none-eabi-gcc"
+    ],
     "github.copilot.chat.commitMessageGeneration.instructions": [
         {
             "text": "Escreva as mensagens de commit sempre em português brasileiro (pt-BR), incluindo título, corpo e listas. Descreva as alterações de forma clara e objetiva. Preserve nomes de arquivos, identificadores, APIs e outros termos técnicos quando necessário."

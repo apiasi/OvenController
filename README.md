@@ -144,6 +144,30 @@ Pinagem, clock e configuração dos periféricos não foram alterados nesta vers
 
 ## Compilação e testes
 
+### Análise C/C++ no VS Code
+
+Use a extensão **clangd**, recomendada pelo projeto. O arquivo `.clangd` aponta
+para `Build/Release/compile_commands.json`, gerado com o compilador ARM, as
+definições `STM32F103xB`/`USE_HAL_DRIVER` e os includes da HAL e do CMSIS.
+Para configurar o editor sem compilar:
+
+```text
+python Tools/build.py --configuration Release --configure-only
+```
+
+A compilação normal também gera essa base. Ela contém caminhos locais e fica
+fora do Git. Após clonar ou mudar a instalação do compilador, gere-a novamente.
+Se os diagnósticos antigos persistirem, execute **clangd: Restart language server**
+pela paleta de comandos (`Ctrl+Shift+P`).
+
+O workspace usa clangd como analisador e desativa somente o IntelliSense paralelo
+da extensão Microsoft C/C++, evitando diagnósticos duplicados. O GCC continua
+com `-Wall -Werror`; avisos reais da compilação não são desativados. A análise de
+includes não utilizados é dispensada apenas nos arquivos agregadores gerados
+pelo CubeMX (`main.h`, `stm32f1xx_hal_conf.h` e `syscalls.c`).
+
+### Compilar e executar testes
+
 Depois de clonar, importe o projeto existente no STM32CubeIDE, selecione Debug
 ou Release e execute Build Project. As pastas de compilação são geradas localmente.
 

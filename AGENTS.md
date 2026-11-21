@@ -142,6 +142,12 @@ precisa ser validado no forno real.
 
 ## Compilação
 
+O VS Code usa clangd com `.clangd` e a base `Build/Release/compile_commands.json`.
+Para configurá-lo sem compilar, execute
+`python Tools/build.py --configuration Release --configure-only`.
+Mantenha essa base sincronizada com flags, macros e includes usados na compilação.
+Não versione seus caminhos locais e não mascare erros reais para limpar o editor.
+
 Em um clone novo, prefira `python Tools/build.py --configuration all`, que gera
 ELF, HEX e BIN em `Build/Debug` e `Build/Release` sem depender dos makefiles locais.
 Não grave a placa como parte desse processo.

@@ -1,4 +1,5 @@
 #include "st7789.h"
+#include "main.h"
 #include "oven_config.h"
 #include <stdbool.h>
 

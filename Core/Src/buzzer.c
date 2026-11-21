@@ -1,4 +1,5 @@
 #include "buzzer.h"
+#include "main.h"
 #include <stdbool.h>
 
 typedef struct {

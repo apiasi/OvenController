@@ -1,7 +1,6 @@
 #ifndef INC_MAX6675_H_
 #define INC_MAX6675_H_
 
-#include "main.h"
 #include <stdbool.h>
 
 typedef enum

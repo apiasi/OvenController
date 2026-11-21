@@ -1,7 +1,7 @@
 #ifndef INC_ST7789_H_
 #define INC_ST7789_H_
 
-#include "main.h"
+#include <stdint.h>
 #include <stdbool.h>
 
 #define ST7789_WIDTH   320

@@ -1,4 +1,5 @@
 #include "max6675.h"
+#include "main.h"
 #include "oven_config.h"
 
 extern SPI_HandleTypeDef hspi2;

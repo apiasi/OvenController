@@ -5,6 +5,7 @@ Requer GNU Arm Embedded com bibliotecas newlib. O compilador pode estar no PATH,
 na instalacao do CubeIDE em C:/ST ou ser informado por --compiler.
 """
 import argparse
+import json
 import pathlib
 import shutil
 import subprocess
@@ -14,6 +15,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--configuration", choices=["Debug", "Release", "all"], default="Release")
     parser.add_argument("--compiler", help="Caminho para arm-none-eabi-gcc")
+    parser.add_argument("--configure-only", action="store_true",
+                        help="Gera a base de compilacao do editor sem compilar o firmware")
     args = parser.parse_args()
     compiler = args.compiler or shutil.which("arm-none-eabi-gcc")
     if not compiler:
@@ -37,14 +40,30 @@ def main():
         output = root / "Build" / configuration
         output.mkdir(parents=True, exist_ok=True)
         binary = output / "OvenController.elf"
-        command = [str(compiler), "-mcpu=cortex-m3", "-mthumb", "-mfloat-abi=soft",
+        flags = ["-mcpu=cortex-m3", "-mthumb", "-mfloat-abi=soft",
                    "-std=gnu11", "-DUSE_HAL_DRIVER", "-DSTM32F103xB", "-Wall", "-Werror",
-                   "-ffunction-sections", "-fdata-sections", "--specs=nosys.specs",
+                   "-ffunction-sections", "-fdata-sections"]
+        flags += ["-O0", "-g3", "-DDEBUG"] if configuration == "Debug" else ["-Os"]
+        flags += ["-I" + str(root / include) for include in includes]
+        # O editor recebe os mesmos parametros de arquitetura, macros e includes.
+        # Parametros exclusivos da linkagem nao pertencem aos comandos de analise.
+        database = [{"directory": str(root), "file": str(source),
+                     "arguments": [str(compiler), *flags, "-c", str(source),
+                                   "-o", str(output / (source.stem + ".o"))]}
+                    for source in sources if source.suffix == ".c"]
+        test_source = root / "Tests/oven_regression.c"
+        database.append({"directory": str(root), "file": str(test_source),
+                         "arguments": [str(compiler), *flags, "-DOVEN_TEST_REAL_UI",
+                                       "-c", str(test_source)]})
+        (output / "compile_commands.json").write_text(
+            json.dumps(database, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"Base do editor gerada em {output / 'compile_commands.json'}", flush=True)
+        if args.configure_only:
+            continue
+        command = [str(compiler), *flags, "--specs=nosys.specs",
                    "--specs=nano.specs", "-static", "-Wl,--gc-sections",
                    "-T" + str(root / "STM32F103C8TX_FLASH.ld"),
                    "-Wl,-Map=" + str(output / "OvenController.map")]
-        command += ["-O0", "-g3", "-DDEBUG"] if configuration == "Debug" else ["-Os"]
-        command += ["-I" + str(root / include) for include in includes]
         command += [str(source) for source in sources]
         command += ["-Wl,--start-group", "-lc", "-lm", "-Wl,--end-group", "-o", str(binary)]
         print(f"Compilando {configuration} ({len(sources)} fontes)...", flush=True)

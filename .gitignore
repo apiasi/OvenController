@@ -20,6 +20,7 @@
 
 # Ambientes e cache do Python.
 __pycache__/
+/.cache/clangd/
 *.py[cod]
 /.venv/
 /venv/

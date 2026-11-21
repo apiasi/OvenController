@@ -72,7 +72,10 @@ void HAL_GPIO_WritePin(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state) {
 HAL_StatusTypeDef HAL_TIM_Encoder_Start(TIM_HandleTypeDef *timer, uint32_t channel) {
     (void)timer; (void)channel; return HAL_OK;
 }
-__attribute__((noinline, noclone))
+__attribute__((noinline))
+#if __has_attribute(noclone)
+__attribute__((noclone))
+#endif
 HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *spi, const uint8_t *data,
                                   uint16_t size, uint32_t timeout) {
     /* O observador SPI do emulador precisa dos bytes, mesmo que o mock nao

@@ -1,0 +1,27 @@
+# Base local gerada por Tools/build.py com o compilador ARM real.
+CompileFlags:
+  CompilationDatabase: Build/Release
+---
+# Este header e incluido pela HAL e depende dos tipos declarados antes dele.
+# Ao abri-lo isoladamente, forneca o mesmo contexto da inclusao normal.
+If:
+  PathMatch: Core/Inc/stm32f1xx_hal_conf\.h
+CompileFlags:
+  Add: [-include, stm32f1xx_hal_def.h]
+---
+# Os arquivos gerados incluem cabecalhos agregadores e servicos padrao da ST.
+# Preserve-os nas regeneracoes; os diagnosticos do compilador continuam ativos.
+If:
+  PathMatch:
+    - Core/Src/syscalls\.c
+    - Core/Inc/(main|stm32f1xx_hal_conf)\.h
+Diagnostics:
+  UnusedIncludes: None
+---
+# O teste inclui os fontes C na mesma unidade. O preambulo do clangd pula
+# corpos desses fontes e pode classificar funcoes usadas como nao utilizadas.
+# Mantenha o aviso como aviso aqui; o executor GCC continua usando -Werror.
+If:
+  PathMatch: Tests/oven_regression\.c
+CompileFlags:
+  Add: [-Wno-error=unused-function]
