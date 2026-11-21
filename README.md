@@ -144,8 +144,22 @@ Pinagem, clock e configuração dos periféricos não foram alterados nesta vers
 
 ## Compilação e testes
 
-No STM32CubeIDE, selecione Debug ou Release e execute Build Project.
-Com GNU Make e `arm-none-eabi-*` no PATH, na raiz:
+Depois de clonar, importe o projeto existente no STM32CubeIDE, selecione Debug
+ou Release e execute Build Project. As pastas de compilação são geradas localmente.
+
+Para compilar diretamente a partir dos fontes, sem abrir o CubeIDE:
+
+```text
+python Tools/build.py --configuration all
+```
+
+O script encontra o compilador no PATH ou na instalação do CubeIDE em `C:/ST`.
+Também aceita `--compiler caminho/arm-none-eabi-gcc.exe`. Gera ELF, HEX e BIN em
+`Build/Debug` e `Build/Release`, sem gravar a placa. Requer GNU Arm Embedded
+com newlib, além de Python 3.
+
+Após o CubeIDE gerar os makefiles, também é possível usar GNU Make e
+`arm-none-eabi-*` no PATH, na raiz:
 
 ```text
 make -C Release all
@@ -153,7 +167,9 @@ make -C Debug all
 ```
 
 As duas configurações incluem `oven_profile.c`. O `.cproject` inclui a pasta
-Core como fonte; o CubeIDE pode regenerar seus makefiles.
+Core como fonte; o CubeIDE regenera seus makefiles. As pastas `Debug`, `Release`
+e `Build` ficam fora do versionamento. As prévias em `Tests/previews` fazem
+parte da documentação e continuam versionadas.
 
 ```text
 python -m pip install -r Tests/requirements.txt

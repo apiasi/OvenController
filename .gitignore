@@ -1,0 +1,36 @@
+# Saidas geradas pela compilacao e pelo STM32CubeIDE.
+/Debug/
+/Release/
+/Build/
+*.o
+*.d
+*.su
+*.cyclo
+*.elf
+*.map
+*.list
+
+# Estado local do Eclipse/CubeIDE e arquivos temporarios.
+/.metadata/
+*.launch
+*.log
+*.bak
+*.tmp
+*~
+
+# Ambientes e cache do Python.
+__pycache__/
+*.py[cod]
+/.venv/
+/venv/
+
+# Configuracoes locais e credenciais.
+.env
+.env.*
+!.env.example
+/.aws/
+/.codex/
+
+# Metadados do sistema operacional.
+Thumbs.db
+.DS_Store

@@ -142,6 +142,10 @@ precisa ser validado no forno real.
 
 ## Compilação
 
+Em um clone novo, prefira `python Tools/build.py --configuration all`, que gera
+ELF, HEX e BIN em `Build/Debug` e `Build/Release` sem depender dos makefiles locais.
+Não grave a placa como parte desse processo.
+
 Execute a partir da raiz, com GNU Make e `arm-none-eabi-*` no PATH:
 
 ```powershell
@@ -152,6 +156,11 @@ make -C Debug all
 Informe o alvo `all` explicitamente: os makefiles incluem regras de limpeza e
 não se deve depender do alvo padrão. No CubeIDE, selecione a configuração e use
 Build Project. Não execute limpeza sem necessidade.
+
+Os makefiles das pastas Debug/Release só existem após geração pelo CubeIDE.
+Essas pastas e Build são ignoradas pelo Git; mantenha a configuração permanente
+no `.cproject`, `.ioc` e no script de compilação. Preserve os arquivos locais
+ao retirar artefatos gerados do índice do Git.
 
 Neste ambiente, as ferramentas foram encontradas em:
 

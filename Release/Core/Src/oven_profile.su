@@ -1,5 +1,0 @@
-../Core/Src/oven_profile.c:12:13:OvenProfile_Name	0	static
-../Core/Src/oven_profile.c:22:6:OvenProfile_Load	12	static
-../Core/Src/oven_profile.c:27:10:OvenProfile_Duration	8	static
-../Core/Src/oven_profile.c:35:6:OvenProfile_Validate	0	static
-../Core/Src/oven_profile.c:45:6:OvenProfile_Evaluate	48	static
