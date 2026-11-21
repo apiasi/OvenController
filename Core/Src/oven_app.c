@@ -35,6 +35,8 @@ static DebouncedButton_t keyK0Button;
 
 static bool uiDirty;
 
+static void ProcessRealtime(void);
+
 static bool Button_ReadPressed(const DebouncedButton_t *button) {
 	return HAL_GPIO_ReadPin(button->port, button->pin) == GPIO_PIN_RESET;
 }
@@ -120,6 +122,12 @@ static void Oven_EnterError(OvenError_t error) {
 	bool newError = (oven.state != OVEN_STATE_ERROR) || (oven.error != error);
 
 	Heater_OffImmediate();
+	/* A falha retida do display nao pode alternar com outra falha a cada
+	 * leitura do sensor, reiniciando o alarme e invalidando a UI sem parar. */
+	if (oven.state == OVEN_STATE_ERROR && oven.error == OVEN_ERROR_DISPLAY
+			&& error != OVEN_ERROR_DISPLAY) {
+		return;
+	}
 	oven.state = OVEN_STATE_ERROR;
 	oven.error = error;
 	uiDirty = true;
@@ -289,6 +297,8 @@ static void ProcessButtons(void) {
 
 	if (push) {
 		if (oven.state == OVEN_STATE_IDLE) {
+			/* Nao leva uma fracao de detent do campo anterior para o novo. */
+			encoderAccumulator = 0;
 			oven.selectedField =
 					(oven.selectedField == OVEN_FIELD_TEMPERATURE) ?
 							OVEN_FIELD_TIME : OVEN_FIELD_TEMPERATURE;
@@ -323,6 +333,7 @@ static void ProcessButtons(void) {
 
 	case OVEN_STATE_ERROR:
 		if (!ST7789_HasError() && oven.sensorValid
+				&& (uint32_t)(HAL_GetTick() - lastValidSensorTick) < OVEN_SENSOR_STALE_MS
 				&& (oven.currentTempC
 						< (OVEN_HARD_MAX_C - OVEN_ERROR_RESET_MARGIN_C))) {
 			Oven_EnterIdle();
@@ -425,6 +436,7 @@ static void ProcessControl(uint32_t now) {
 }
 
 static void ProcessUi(uint32_t now) {
+	OvenStatus_t snapshot;
 	/* Falha retida: nao tenta desenhar novamente em um barramento com erro. */
 	if (ST7789_HasError()) {
 		return;
@@ -441,7 +453,10 @@ static void ProcessUi(uint32_t now) {
 
 	lastUiTick = now;
 	uiDirty = false;
-	OvenUI_Render(&oven);
+	/* As entradas continuam mudando oven durante o desenho. A UI recebe
+	 * uma copia coerente; eventos durante o render mantem uiDirty=true. */
+	snapshot = oven;
+	OvenUI_Render(&snapshot);
 	if (ST7789_HasError()) {
 		Oven_EnterError(OVEN_ERROR_DISPLAY);
 	}
@@ -449,6 +464,7 @@ static void ProcessUi(uint32_t now) {
 
 void OvenApp_Init(void) {
 	uint32_t now = HAL_GetTick();
+	ST7789_SetServiceCallback(NULL);
 
 	oven.state = OVEN_STATE_IDLE;
 	oven.selectedField = OVEN_FIELD_TEMPERATURE;
@@ -489,9 +505,11 @@ void OvenApp_Init(void) {
 	if (ST7789_HasError()) {
 		Oven_EnterError(OVEN_ERROR_DISPLAY);
 	}
+	ST7789_SetServiceCallback(ProcessRealtime);
 }
 
-void OvenApp_Process(void) {
+/* Nunca chama a UI. Pode ser executada entre blocos do driver ST7789. */
+static void ProcessRealtime(void) {
 	uint32_t now = HAL_GetTick();
 	int32_t encoderSteps;
 
@@ -510,6 +528,10 @@ void OvenApp_Process(void) {
 
 	/* Atualiza o relogio depois das operacoes SPI. */
 	ProcessControl(HAL_GetTick());
+}
+
+void OvenApp_Process(void) {
+	ProcessRealtime();
 	ProcessUi(HAL_GetTick());
 }
 

@@ -11,7 +11,7 @@ OPERACAO
 - Encoder: ajusta o valor selecionado.
 - PUSH: alterna TEMP/TEMPO.
 - K0 no IDLE: START.
-- K0 em HEATING/RUNNING: STOP apos debounce de 60 ms mais processamento do laco.
+- K0 em HEATING/RUNNING: STOP apos debounce de 25 ms mais processamento.
 - K0 em FINISHED: volta para configuracao.
 - K0 em ERROR: tenta resetar apenas se o sensor estiver valido e a temperatura estiver segura.
 
@@ -21,4 +21,5 @@ IMPORTANTE
 - Termopar aberto ou erro SPI durante o ciclo desliga o SSR ao detectar a falha.
 - Sobretemperatura desliga o SSR ao detectar a leitura acima do limite.
 - A leitura do sensor ocorre a cada 250 ms, acrescida do tempo do laco e SPI.
-- Revisao 3.0.0: consulte REVISAO_V3.txt para watchdog e novos bloqueios.
+- Revisao 3.1.0: consulte REVISAO_V3_1.txt para resposta das entradas e testes.
+- Watchdog e bloqueios de seguranca: historico em REVISAO_V3.txt.

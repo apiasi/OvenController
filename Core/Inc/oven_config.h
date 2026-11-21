@@ -1,7 +1,7 @@
 #ifndef INC_OVEN_CONFIG_H_
 #define INC_OVEN_CONFIG_H_
 
-#define OVEN_FIRMWARE_VERSION          "3.0.0"
+#define OVEN_FIRMWARE_VERSION          "3.1.0"
 #define OVEN_HEATING_TIMEOUT_MS        (30UL * 60UL * 1000UL)
 #define OVEN_SENSOR_STALE_MS           1000U
 #define OVEN_SENSOR_SPI_TIMEOUT_MS     5U
@@ -30,7 +30,7 @@
 
 /* Periodos das tarefas cooperativas */
 #define OVEN_SENSOR_PERIOD_MS         250U
-#define OVEN_UI_PERIOD_MS             500U
+#define OVEN_UI_PERIOD_MS             40U
 
 /* EC11 normalmente gera 4 contagens por detent em Encoder Mode TI12.
  * Se o seu encoder der 2 ou 1 contagem por clique, ajuste aqui. */
@@ -42,6 +42,10 @@
 /* Debounce verdadeiro dos botoes PUSH e K0.
  * O nivel precisa permanecer estavel este tempo tanto ao pressionar
  * quanto ao liberar antes de uma nova pressao ser aceita. */
-#define OVEN_BUTTON_DEBOUNCE_MS       60U
+#define OVEN_BUTTON_DEBOUNCE_MS       25U
+
+#if OVEN_ENCODER_COUNTS_PER_STEP <= 0
+#error "OVEN_ENCODER_COUNTS_PER_STEP deve ser positivo"
+#endif
 
 #endif /* INC_OVEN_CONFIG_H_ */

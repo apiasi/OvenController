@@ -1,11 +1,11 @@
-# OvenController 3.0.0 - STM32F103 + ST7789 + MAX6675
+# OvenController 3.1.0 - STM32F103 + ST7789 + MAX6675
 
 Controlador de forno baseado no projeto CubeMX atual.
 
-Revisão 3.0.0: desligamento do SSR nos handlers de falha, watchdog,
-timeouts SPI, bloqueio por falha de comunicação com o display e limite
-configurável de 30 minutos para atingir a temperatura alvo.
-Detalhes e roteiro de bancada em `REVISAO_V3.txt`.
+Revisão 3.1.0: leitura das entradas e controle atendidos durante o desenho,
+atualização da UI a cada 40 ms quando há mudanças, debounce de 25 ms e desenho
+somente do valor alterado pelo encoder. Preserva as proteções da revisão 3.0.0.
+Detalhes e roteiro de bancada em `REVISAO_V3_1.txt`; histórico em `REVISAO_V3.txt`.
 
 ## Fluxo funcional
 
@@ -16,7 +16,7 @@ Detalhes e roteiro de bancada em `REVISAO_V3.txt`.
 5. Ao atingir o setpoint, inicia a contagem do tempo configurado.
 6. Durante a contagem, a temperatura é mantida por controle ON/OFF com histerese.
 7. Ao terminar o tempo, o SSR é desligado e a tela mostra **FINALIZADO**.
-8. Durante aquecimento/controle, **K0** interrompe o ciclo após validar a pressão por 60 ms, acrescidos do tempo de processamento do laço.
+8. Durante aquecimento/controle, **K0** interrompe o ciclo após validar a pressão por 25 ms, acrescidos do tempo de processamento entre atendimentos das entradas.
 9. Toda interação por encoder/botões gera feedback pelo buzzer.
 
 ## Estados
@@ -89,6 +89,8 @@ Em `oven_config.h`:
 #define OVEN_SENSOR_STALE_MS           1000U
 #define OVEN_SENSOR_SPI_TIMEOUT_MS     5U
 #define OVEN_DISPLAY_SPI_TIMEOUT_MS    10U
+#define OVEN_UI_PERIOD_MS             40U
+#define OVEN_BUTTON_DEBOUNCE_MS       25U
 ```
 
 Se o encoder girar ao contrário, troque `OVEN_ENCODER_DIRECTION` para `-1`.
@@ -111,11 +113,15 @@ Os testes executam código ARM emulado, com chamadas da HAL simuladas:
 ```text
 python -m pip install -r Tests/requirements.txt
 python Tests/run_regression.py
+python Tests/run_regression.py --scenario inputs
 ```
 
 O executor localiza o compilador no PATH ou em `C:/ST/STM32CubeIDE*`.
 Também aceita `--compiler caminho/arm-none-eabi-gcc.exe`.
 Os testes não gravam firmware nem acionam equipamentos conectados.
+O cenário `inputs` usa a UI e o buzzer reais, com transmissões SPI simuladas
+a 9 Mbit/s e eventos de entrada durante desenhos completos. Os tempos obtidos
+nesse cenário não incluem o custo real de execução da CPU.
 
 ## Segurança
 

@@ -1,0 +1,82 @@
+OvenController 3.1.0 - Resposta das entradas e revisao de bugs
+Data: 21/11/2026
+
+CAUSAS IDENTIFICADAS NO CODIGO
+
+- A UI aguardava ate 500 ms para apresentar uma mudanca.
+- Desenhos completos impediam polling de botoes, controle e buzzer.
+  Somente transmitir 320 x 240 pixels RGB565 a 9 Mbit/s requer cerca de
+  137 ms; desenho de textos e outras areas aumenta esse tempo.
+  Uma pressao que comecasse e terminasse durante o desenho podia ser perdida.
+- O ajuste de um valor redesenhava os dois cards, fundos e titulos.
+- A expansao da fonte dividia coordenadas por escala para cada pixel.
+- Os 60 ms de debounce somavam-se aos atrasos de desenho e atualizacao.
+
+CORRECOES
+
+1. Atendimento cooperativo durante a renderizacao.
+   - ST7789 executa um callback depois de cada bloco de preenchimento
+     (ate 256 bytes) e de cada caractere.
+   - ProcessRealtime atende botoes, encoder, sensor, buzzer e controle.
+   - O callback nao desenha, nao usa SPI1 e nao alimenta o watchdog.
+   - Os botões continuam sendo aceitos por polling com estado estavel,
+     sem comandos derivados diretamente das bordas EXTI.
+
+2. Feedback visual.
+   - Periodo minimo da UI reduzido de 500 para 40 ms, apenas quando ha mudancas.
+   - Ajustar um valor redesenha somente o texto daquele valor.
+   - Trocar o campo pelo PUSH atualiza os dois cards, sem apagar a tela inteira.
+   - Expansao da fonte reescrita sem divisoes por pixel, preservando os pixels.
+
+3. Debounce e encoder.
+   - Estabilidade de pressao e liberacao reduzida para 25 ms.
+   - Segurar um botao continua produzindo somente um evento.
+   - Contagens parciais do encoder sao descartadas ao trocar o campo pelo PUSH.
+   - Verificacao de compilacao impede contagens por passo nulas ou negativas.
+   - Mantidos TIM4, pinagem, filtros, sentido e quatro contagens por passo.
+
+4. Coerencia e erros.
+   - A UI usa uma copia do status; as entradas podem alterar o estado real
+     durante a renderizacao sem misturar dados no mesmo desenho.
+   - Uma invalidacao ocorrida durante um desenho nao e mais sobrescrita.
+   - Falha retida do display nao alterna com sobretemperatura a cada leitura,
+     evitando reinicio continuo do alarme.
+   - Reconhecimento de erro tambem exige leitura de temperatura recente.
+   - Tela de erro do sensor informa FALHA NO SENSOR / VERIFIQUE TERMOPAR:
+     erro SPI e leitura antiga tambem podem ser a causa, alem de termopar aberto.
+
+VALIDACAO
+
+- Debug e Release compilados com GNU Tools for STM32 13.3.rel1, sem avisos.
+- Analise estatica GCC (-fanalyzer, -Wall, -Wextra) em todos os C de Core/Src
+  concluida sem diagnosticos.
+- Regressao ARM: controle, protecoes, ruido curto no PUSH, botao mantido,
+  troca de campo com passo parcial, contador do encoder passando por zero,
+  prioridade do erro retido e reconhecimento com leitura antiga.
+- Integracao ARM com UI e buzzer reais: START, STOP, PUSH, dez passos de encoder
+  e falha do termopar durante redesenhos completos.
+- Conferidos pixels da fonte nas cinco escalas e preservacao de eventos e
+  invalidacoes ocorridos durante o desenho.
+- Testados os seis handlers de falha, verificando o comando de corte de PB0.
+
+RESULTADOS DO MODELO DE SPI
+
+Com tempo de transmissao simulado a 9 Mbit/s, START e STOP foram aceitos
+25 ms apos o inicio da pressao, durante desenho completo.
+Atualizar somente a temperatura configurada transmitiu 2765 bytes SPI,
+contra 39267 bytes calculados para o redesenho anterior dos dois cards.
+Os tempos incluem debounce e transmissao simulada; nao modelam os ciclos
+reais da CPU, interrupcoes, ruido eletrico ou a dinamica do hardware.
+
+LIMITACOES E BANCADA
+
+- Medir na placa a resposta visual, os bips, PUSH e K0 enquanto a tela muda.
+- Validar que 25 ms rejeitam adequadamente o bounce dos botoes instalados.
+- Confirmar um ajuste por clique do encoder. Se necessario, calibrar
+  OVEN_ENCODER_COUNTS_PER_STEP para o encoder real, sem adivinhar sua resolucao.
+- PB6/PB7 estao configurados sem pull-up interno. Conferir se a montagem possui
+  os pull-ups necessarios caso persistam movimentos erraticos.
+- Um desenho completo continua consumindo tempo; o controle e as entradas
+  sao atendidos durante ele, mas a apresentacao da nova tela ainda leva tempo.
+- Repetir as verificacoes de bancada das protecoes descritas em REVISAO_V3.txt.
+- Nenhuma gravacao, reset da placa ou acionamento do forno foi realizado.

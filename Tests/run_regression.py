@@ -18,6 +18,7 @@ from unicorn.arm_const import UC_ARM_REG_SP, UC_ARM_REG_PC, UC_CPU_ARM_CORTEX_M3
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler")
+    parser.add_argument("--scenario", choices=["regression", "inputs"], default="regression")
     args = parser.parse_args()
     compiler = args.compiler or shutil.which("arm-none-eabi-gcc")
     if not compiler:
@@ -31,11 +32,14 @@ def main():
     root = pathlib.Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix="oven-regression-") as temporary:
         binary = pathlib.Path(temporary) / "tests.elf"
+        entry = "input_test_start" if args.scenario == "inputs" else "test_start"
         command = [compiler, "-mcpu=cortex-m3", "-mthumb", "-mfloat-abi=soft",
                    "-std=gnu11", "-Os", "-Wall", "-Wextra", "-Werror",
                    "-DUSE_HAL_DRIVER", "-DSTM32F103xB", "-ffunction-sections",
                    "-fdata-sections", "-nostdlib", "-Wl,--gc-sections",
-                   "-Wl,-e,test_start", "-TSTM32F103C8TX_FLASH.ld"]
+                   "-Wl,-e," + entry, "-TSTM32F103C8TX_FLASH.ld"]
+        if args.scenario == "inputs":
+            command += ["-DOVEN_TEST_REAL_UI", "--specs=nano.specs"]
         for include in ["Core/Inc", "Drivers/STM32F1xx_HAL_Driver/Inc",
                         "Drivers/STM32F1xx_HAL_Driver/Inc/Legacy",
                         "Drivers/CMSIS/Device/ST/STM32F1xx/Include", "Drivers/CMSIS/Include"]:
@@ -43,7 +47,8 @@ def main():
         faults = ["NMI_Handler", "HardFault_Handler", "MemManage_Handler",
                   "BusFault_Handler", "UsageFault_Handler", "Error_Handler"]
         command += ["-Wl,--undefined=" + name for name in faults]
-        command += ["Tests/oven_regression.c", "-lgcc", "-o", str(binary)]
+        command += ["Tests/oven_regression.c", "-Wl,--start-group", "-lc", "-lgcc",
+                    "-lnosys", "-Wl,--end-group", "-o", str(binary)]
         subprocess.run(command, cwd=root, check=True)
         machine = Uc(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_MCLASS)
         machine.ctl_set_cpu_model(UC_CPU_ARM_CORTEX_M3)
@@ -72,8 +77,8 @@ def main():
             return False
         machine.hook_add(UC_HOOK_MEM_INVALID, on_invalid)
         machine.reg_write(UC_ARM_REG_SP, 0x20005000)
-        machine.emu_start(symbols["test_start"] | 1, 0, timeout=30_000_000,
-                          count=10_000_000)
+        machine.emu_start(symbols[entry] | 1, 0, timeout=30_000_000,
+                          count=50_000_000)
         read = lambda name: int.from_bytes(machine.mem_read(symbols[name], 4), "little")
         if not stopped:
             raise RuntimeError("O teste nao terminou dentro do limite de execucao")
@@ -93,6 +98,11 @@ def main():
             if brr != 1 or (crl & 0xF) != 2:
                 raise AssertionError(f"SSR nao desligado por {name}")
         print(f"OK: {count} verificacoes do codigo ARM e {len(faults)} handlers passaram.")
+        if args.scenario == "inputs":
+            print(f"SPI simulado a 9 Mbit/s: START={read('measuredStartLatency')} ms, "
+                  f"STOP={read('measuredStopLatency')} ms apos inicio da pressao.")
+            print(f"Atualizacao de um valor do encoder: {read('measuredCardBytes')} bytes SPI.")
+            print("Tempos incluem debounce e transmissao simulada; ciclos da CPU nao modelados.")
 
 
 if __name__ == "__main__":

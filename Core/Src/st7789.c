@@ -7,6 +7,17 @@ extern SPI_HandleTypeDef hspi1;
 
 /* Falha fica retida ate reiniciar; nenhuma nova transferencia e tentada. */
 static bool spiFailed;
+static void (*serviceCallback)(void);
+
+void ST7789_SetServiceCallback(void (*callback)(void)) {
+    serviceCallback = callback;
+}
+
+static void ST7789_Service(void) {
+    if (serviceCallback != NULL) {
+        serviceCallback();
+    }
+}
 
 bool ST7789_HasError(void) {
     return spiFailed;
@@ -212,6 +223,9 @@ void ST7789_FillRect(uint16_t x,
         }
 
         pixels -= count;
+        /* SPI1 ja terminou o bloco; SPI2 e as entradas podem ser atendidos.
+         * O callback nao deve acessar o display enquanto CS estiver baixo. */
+        ST7789_Service();
     }
 
     ST7789_Unselect();
@@ -369,29 +383,22 @@ void ST7789_DrawChar(uint16_t x,
     bgHi = (uint8_t)(bgcolor >> 8);
     bgLo = (uint8_t)(bgcolor & 0xFFU);
 
-    for (uint16_t py = 0U; py < charHeight; py++)
+    /* Expande a fonte sem dividir coordenadas por scale a cada pixel. */
+    for (uint8_t row = 0U; row < 8U; row++)
     {
-        uint8_t row = (uint8_t)(py / scale);
-
-        for (uint16_t px = 0U; px < charWidth; px++)
+        for (uint8_t sy = 0U; sy < scale; sy++)
         {
-            uint8_t col = (uint8_t)(px / scale);
-            bool foreground = false;
-
-            if ((col < 5U) && (row < 7U))
+            for (uint8_t col = 0U; col < 6U; col++)
             {
-                foreground = (glyph[col] & (1U << row)) != 0U;
-            }
-
-            if (foreground)
-            {
-                st7789CharBuffer[index++] = fgHi;
-                st7789CharBuffer[index++] = fgLo;
-            }
-            else
-            {
-                st7789CharBuffer[index++] = bgHi;
-                st7789CharBuffer[index++] = bgLo;
+                bool foreground = (col < 5U) && (row < 7U)
+                    && ((glyph[col] & (1U << row)) != 0U);
+                uint8_t high = foreground ? fgHi : bgHi;
+                uint8_t low = foreground ? fgLo : bgLo;
+                for (uint8_t sx = 0U; sx < scale; sx++)
+                {
+                    st7789CharBuffer[index++] = high;
+                    st7789CharBuffer[index++] = low;
+                }
             }
         }
     }
@@ -408,6 +415,7 @@ void ST7789_DrawChar(uint16_t x,
     (void)ST7789_Transmit(st7789CharBuffer,
                          (uint16_t)(charWidth * charHeight * 2U));
     ST7789_Unselect();
+    ST7789_Service();
 }
 
 void ST7789_WriteString(uint16_t x,

@@ -1,8 +1,8 @@
-../Core/Src/oven_ui.c:28:13:UI_ResetDynamicCache	1
-../Core/Src/oven_ui.c:175:13:UI_UpdateHeaterStatus	3
-../Core/Src/oven_ui.c:78:13:UI_DrawHeader	1
-../Core/Src/oven_ui.c:83:13:UI_DrawFooter	1
-../Core/Src/oven_ui.c:155:13:UI_UpdateCurrentTemperature	5
-../Core/Src/oven_ui.c:274:6:OvenUI_Init	1
-../Core/Src/oven_ui.c:281:6:OvenUI_Invalidate	1
-../Core/Src/oven_ui.c:285:6:OvenUI_Render	24
+../Core/Src/oven_ui.c:29:13:UI_ResetDynamicCache	1
+../Core/Src/oven_ui.c:176:13:UI_UpdateHeaterStatus	3
+../Core/Src/oven_ui.c:79:13:UI_DrawHeader	1
+../Core/Src/oven_ui.c:84:13:UI_DrawFooter	1
+../Core/Src/oven_ui.c:156:13:UI_UpdateCurrentTemperature	5
+../Core/Src/oven_ui.c:281:6:OvenUI_Init	1
+../Core/Src/oven_ui.c:288:6:OvenUI_Invalidate	1
+../Core/Src/oven_ui.c:293:6:OvenUI_Render	28

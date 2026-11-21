@@ -22,6 +22,8 @@
 
 void ST7789_Init(void);
 bool ST7789_HasError(void);
+/* Callback cooperativo: nao pode desenhar, usar SPI1 ou alimentar watchdog. */
+void ST7789_SetServiceCallback(void (*callback)(void));
 void ST7789_FillScreen(uint16_t color);
 void ST7789_FillRect(uint16_t x,
                      uint16_t y,

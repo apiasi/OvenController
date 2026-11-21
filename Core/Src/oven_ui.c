@@ -15,6 +15,7 @@
 #define UI_DIM         ST7789_DARKGRAY
 
 static bool uiInvalid = true;
+static uint32_t invalidationGeneration;
 static OvenState_t lastState = (OvenState_t) 0xFF;
 static OvenField_t lastField = (OvenField_t) 0xFF;
 static int32_t lastTempQuarter = INT32_MIN;
@@ -132,8 +133,8 @@ static void UI_DrawErrorStatic(OvenError_t error) {
 	UI_DrawHeader("ERRO", UI_ERROR);
 
 	if (error == OVEN_ERROR_SENSOR) {
-		ST7789_WriteString(38, 78, "SENSOR TERMOPAR", UI_ERROR, UI_BG, 3);
-		ST7789_WriteString(86, 118, "DESCONECTADO", UI_WARN, UI_BG, 2);
+		ST7789_WriteString(38, 78, "FALHA NO SENSOR", UI_ERROR, UI_BG, 3);
+		ST7789_WriteString(50, 118, "VERIFIQUE TERMOPAR", UI_WARN, UI_BG, 2);
 	} else if (error == OVEN_ERROR_OVERTEMP) {
 		ST7789_WriteString(50, 78, "SOBRETEMPERATURA", UI_ERROR, UI_BG, 2);
 	} else if (error == OVEN_ERROR_HEATING_TIMEOUT) {
@@ -208,18 +209,24 @@ static void UI_UpdateIdleCards(const OvenStatus_t *status) {
 					ST7789_BLACK : UI_FG;
 	timeFg = (status->selectedField == OVEN_FIELD_TIME) ? ST7789_BLACK : UI_FG;
 
-	ST7789_FillRect(12, 148, 145, 52, tempBg);
-	ST7789_WriteString(20, 154, "TEMP", tempFg, tempBg, 2);
-	(void) snprintf(text, sizeof(text), "%u C", (unsigned) status->setpointC);
-	UI_Pad(padded, sizeof(padded), text, 7U);
-	ST7789_WriteString(20, 177, padded, tempFg, tempBg, 2);
-
-	ST7789_FillRect(163, 148, 145, 52, timeBg);
-	ST7789_WriteString(171, 154, "TEMPO", timeFg, timeBg, 2);
-	(void) snprintf(text, sizeof(text), "%u MIN",
-			(unsigned) status->setTimeMin);
-	UI_Pad(padded, sizeof(padded), text, 7U);
-	ST7789_WriteString(171, 177, padded, timeFg, timeBg, 2);
+	/* Girar o encoder atualiza apenas o valor do card afetado. Fundos e
+	 * titulos precisam mudar somente quando a selecao muda. */
+	if (selectionChanged) {
+		ST7789_FillRect(12, 148, 145, 52, tempBg);
+		ST7789_WriteString(20, 154, "TEMP", tempFg, tempBg, 2);
+		ST7789_FillRect(163, 148, 145, 52, timeBg);
+		ST7789_WriteString(171, 154, "TEMPO", timeFg, timeBg, 2);
+	}
+	if (selectionChanged || status->setpointC != lastSetpoint) {
+		(void) snprintf(text, sizeof(text), "%u C", (unsigned) status->setpointC);
+		UI_Pad(padded, sizeof(padded), text, 7U);
+		ST7789_WriteString(20, 177, padded, tempFg, tempBg, 2);
+	}
+	if (selectionChanged || status->setTimeMin != lastTimeMin) {
+		(void) snprintf(text, sizeof(text), "%u MIN", (unsigned) status->setTimeMin);
+		UI_Pad(padded, sizeof(padded), text, 7U);
+		ST7789_WriteString(171, 177, padded, timeFg, timeBg, 2);
+	}
 
 	lastSetpoint = status->setpointC;
 	lastTimeMin = status->setTimeMin;
@@ -280,10 +287,12 @@ void OvenUI_Init(void) {
 
 void OvenUI_Invalidate(void) {
 	uiInvalid = true;
+	invalidationGeneration++;
 }
 
 void OvenUI_Render(const OvenStatus_t *status) {
 	bool fullRedraw;
+	uint32_t generation = invalidationGeneration;
 
 	if (status == NULL) {
 		return;
@@ -316,7 +325,8 @@ void OvenUI_Render(const OvenStatus_t *status) {
 			break;
 		}
 
-		uiInvalid = false;
+		/* Uma mudanca de estado/erro durante o desenho pede outra tela. */
+		uiInvalid = (generation != invalidationGeneration);
 		lastState = status->state;
 		UI_ResetDynamicCache();
 	}
