@@ -4,6 +4,24 @@ Estas instruções se aplicam a todo o projeto. As instruções explícitas do u
 têm prioridade. Converse em português brasileiro e descreva as mudanças de forma
 direta, incluindo o que foi validado e o que ainda depende de bancada.
 
+## Idioma dos comentários e da documentação
+
+- Escreva sempre em **português brasileiro** os comentários de código,
+  docstrings, explicações e documentação criados ou modificados pela IA.
+- Mensagens de commit geradas pela IA também devem estar em português brasileiro,
+  incluindo título, corpo e listas. A configuração específica do gerador do
+  Copilot no VS Code está em `.vscode/settings.json`, na chave
+  `github.copilot.chat.commitMessageGeneration.instructions`.
+- Essa regra vale para todos os arquivos do projeto, inclusive C, headers,
+  Python, scripts e testes. Não adote inglês nos comentários por acompanhar
+  o idioma dos identificadores ou das bibliotecas.
+- Preserve nomes de funções, variáveis, APIs, registradores e constantes quando
+  forem necessários à compatibilidade ou ao padrão existente do código.
+- Preserve marcadores do CubeMX (`USER CODE BEGIN/END`), avisos de licença e
+  textos gerados por ferramentas ou fornecidos por terceiros. Ao acrescentar
+  comentários próprios nesses arquivos, escreva-os em português brasileiro.
+- Não traduza em massa os comentários existentes sem uma tarefa que peça isso.
+
 ## Contexto e fontes de referência
 
 Firmware em C para controlador de forno com STM32F103C8T6, Cortex-M3 a 72 MHz,
@@ -12,6 +30,7 @@ GNU Tools for STM32. A aplicação executa tarefas cooperativas no laço princip
 sem RTOS.
 
 - Leia `README.md` para operação e pinagem.
+- `REVISAO_V4.txt` documenta os perfis de quatro pontos e a interface da versão 4.0.0.
 - Consulte `REVISAO_V3_1.txt` para a revisão 3.1.0 e pendências de bancada;
   `REVISAO_V3.txt` documenta as proteções introduzidas na revisão anterior.
 - Confira os valores atuais em `Core/Inc/oven_config.h`; este arquivo define a versão.
@@ -25,6 +44,7 @@ sem RTOS.
 | --- | --- |
 | `Core/Src/main.c` | Inicialização, clock, periféricos, corte de emergência e watchdog |
 | `Core/Src/oven_app.c` | Estados, entradas, temporização, controle e comando do SSR |
+| `Core/Src/oven_profile.c` | Presets com chumbo, validação e interpolação dos quatro pontos |
 | `Core/Inc/oven_types.h` | Estados, erros e estrutura de status |
 | `Core/Inc/oven_config.h` | Versão, limites e períodos configuráveis |
 | `Core/Src/oven_ui.c` | Telas e atualização seletiva dos campos |
@@ -38,11 +58,21 @@ sem RTOS.
 
 ## Comportamento a preservar
 
-- Estados: `IDLE`, `HEATING`, `RUNNING`, `FINISHED` e `ERROR`.
-- Encoder ajusta temperatura ou tempo somente em `IDLE`; PUSH troca o campo.
+- Estados: `IDLE`, `HEATING`, `RUNNING`, `COOLING`, `FINISHED` e `ERROR`.
+- Preserve os dois modos: **Manual / Secagem**, com temperatura constante e
+  temporização, e **Reflow**, com quatro pontos. O usuário precisa de ambos.
+- O seletor inclui Manual, Sn63/Pb37, Sn62/Pb36/Ag2 e Personalizado. Não adicionar
+  perfis sem chumbo como padrão: o usuário trabalha com pasta com chumbo.
+- Encoder edita somente em `IDLE`. No Manual, PUSH alterna perfil/temperatura/tempo;
+  no Reflow, abre o editor de 12 células. PUSH longo volta ao seletor.
+- Cada ponto de Reflow define alvo, duração da rampa e permanência. Editar um
+  preset cria a cópia Personalizado, preservando o preset original.
 - K0 inicia, interrompe ou reconhece o estado, conforme a máquina de estados.
-- A contagem começa ao atingir o alvo. Depois disso, continua mesmo se a
-  temperatura cair. O controle térmico usa histerese, sem PID.
+- No Manual, a contagem começa ao atingir o alvo e continua mesmo se a temperatura
+  cair. No Reflow, a referência é interpolada em função do tempo desde o início.
+  Os dois modos usam histerese, sem PID ou compensação automática de inércia.
+- Reflow termina o aquecimento em `COOLING`, com SSR desligado até medir 60 °C.
+  Não há atuador de resfriamento; a extensão pontilhada do gráfico é ilustrativa.
 - Ajustes ficam em RAM e retornam aos padrões após reiniciar.
 - Botões são validados por polling, com 25 ms de estabilidade na pressão
   e na liberação. Não voltar a aceitar comandos diretamente por bordas EXTI.
@@ -64,6 +94,11 @@ Ao alterar uma regra funcional, atualize documentação e testes relacionados.
   falha, sem SPI, espera, alocação dinâmica ou dependência de interrupções.
 - Falhas do sensor, leituras antigas, sobretemperatura e prazo de aquecimento
   excedido devem impedir o aquecimento.
+- Reflow inicia com até 50 °C; exige pontos válidos, verificação de desvio ao
+  terminar cada ponto e proteção contra temperatura acima do pico + tolerância.
+  O resfriamento tem limite de tempo e mantém a monitoração do sensor.
+- Os presets são exemplos iniciais, não perfis qualificados. Consulte a ficha
+  técnica da pasta real e diferencie temperatura medida no forno e na placa.
 - Um erro SPI do display desliga o SSR e fica retido até reiniciar. O SPI
   unidirecional não confirma se o display está fisicamente conectado.
 - Não introduza esperas infinitas em drivers. Verifique retornos das chamadas HAL
@@ -139,6 +174,8 @@ e correções de falhas; evite testes que apenas repitam a implementação.
 python -m pip install -r Tests/requirements.txt
 python Tests/run_regression.py
 python Tests/run_regression.py --scenario inputs
+python Tests/run_regression.py --scenario profiles
+python Tests/run_regression.py --scenario preview
 ```
 
 Prefira ambiente virtual ou instalação temporária das dependências. Se já

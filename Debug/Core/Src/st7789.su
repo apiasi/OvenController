@@ -10,8 +10,8 @@
 ../Core/Src/st7789.c:86:13:ST7789_SetAddressWindow	32	static
 ../Core/Src/st7789.c:110:6:ST7789_Init	16	static
 ../Core/Src/st7789.c:142:6:ST7789_DrawPixel	24	static
-../Core/Src/st7789.c:160:6:ST7789_FillRect	296	static
-../Core/Src/st7789.c:234:6:ST7789_FillScreen	24	static
-../Core/Src/st7789.c:301:23:ST7789_GetGlyph	16	static
-../Core/Src/st7789.c:344:6:ST7789_DrawChar	48	static
-../Core/Src/st7789.c:421:6:ST7789_WriteString	48	static
+../Core/Src/st7789.c:161:6:ST7789_FillRect	296	static
+../Core/Src/st7789.c:235:6:ST7789_FillScreen	24	static
+../Core/Src/st7789.c:302:23:ST7789_GetGlyph	16	static
+../Core/Src/st7789.c:345:6:ST7789_DrawChar	48	static
+../Core/Src/st7789.c:422:6:ST7789_WriteString	48	static

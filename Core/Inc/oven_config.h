@@ -1,7 +1,17 @@
 #ifndef INC_OVEN_CONFIG_H_
 #define INC_OVEN_CONFIG_H_
 
-#define OVEN_FIRMWARE_VERSION          "3.1.0"
+#define OVEN_FIRMWARE_VERSION          "4.0.0"
+#define OVEN_PROFILE_POINT_COUNT       4U
+#define OVEN_PROFILE_RAMP_MIN_S        5U
+#define OVEN_PROFILE_RAMP_MAX_S        600U
+#define OVEN_PROFILE_HOLD_MAX_S        600U
+#define OVEN_PROFILE_START_MAX_C       50.0f
+#define OVEN_PROFILE_TOLERANCE_C       15.0f
+#define OVEN_COOL_TARGET_C             60.0f
+#define OVEN_COOL_TIMEOUT_MS           (30UL * 60UL * 1000UL)
+#define OVEN_TRACE_CAPACITY            64U
+#define OVEN_PUSH_LONG_MS              700U
 #define OVEN_HEATING_TIMEOUT_MS        (30UL * 60UL * 1000UL)
 #define OVEN_SENSOR_STALE_MS           1000U
 #define OVEN_SENSOR_SPI_TIMEOUT_MS     5U

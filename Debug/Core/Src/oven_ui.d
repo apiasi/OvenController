@@ -1,5 +1,6 @@
 Core/Src/oven_ui.o: ../Core/Src/oven_ui.c ../Core/Inc/oven_ui.h \
- ../Core/Inc/oven_types.h ../Core/Inc/st7789.h ../Core/Inc/main.h \
+ ../Core/Inc/oven_types.h ../Core/Inc/oven_config.h \
+ ../Core/Inc/oven_profile.h ../Core/Inc/st7789.h ../Core/Inc/main.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h \
  ../Core/Inc/stm32f1xx_hal_conf.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc.h \
@@ -27,6 +28,8 @@ Core/Src/oven_ui.o: ../Core/Src/oven_ui.c ../Core/Inc/oven_ui.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 ../Core/Inc/oven_ui.h:
 ../Core/Inc/oven_types.h:
+../Core/Inc/oven_config.h:
+../Core/Inc/oven_profile.h:
 ../Core/Inc/st7789.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h:

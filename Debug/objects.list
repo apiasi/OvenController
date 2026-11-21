@@ -2,6 +2,7 @@
 "./Core/Src/main.o"
 "./Core/Src/max6675.o"
 "./Core/Src/oven_app.o"
+"./Core/Src/oven_profile.o"
 "./Core/Src/oven_ui.o"
 "./Core/Src/st7789.o"
 "./Core/Src/stm32f1xx_hal_msp.o"

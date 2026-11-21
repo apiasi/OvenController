@@ -1,7 +1,7 @@
 Core/Src/oven_app.o: ../Core/Src/oven_app.c ../Core/Inc/oven_app.h \
- ../Core/Inc/oven_types.h ../Core/Inc/oven_config.h ../Core/Inc/oven_ui.h \
- ../Core/Inc/max6675.h ../Core/Inc/main.h \
- ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h \
+ ../Core/Inc/oven_types.h ../Core/Inc/oven_config.h \
+ ../Core/Inc/oven_config.h ../Core/Inc/oven_ui.h ../Core/Inc/max6675.h \
+ ../Core/Inc/main.h ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h \
  ../Core/Inc/stm32f1xx_hal_conf.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h \
@@ -26,9 +26,11 @@ Core/Src/oven_app.o: ../Core/Src/oven_app.c ../Core/Inc/oven_app.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_spi.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h \
- ../Core/Inc/buzzer.h ../Core/Inc/main.h ../Core/Inc/st7789.h
+ ../Core/Inc/buzzer.h ../Core/Inc/main.h ../Core/Inc/st7789.h \
+ ../Core/Inc/oven_profile.h
 ../Core/Inc/oven_app.h:
 ../Core/Inc/oven_types.h:
+../Core/Inc/oven_config.h:
 ../Core/Inc/oven_config.h:
 ../Core/Inc/oven_ui.h:
 ../Core/Inc/max6675.h:
@@ -61,3 +63,4 @@ Core/Src/oven_app.o: ../Core/Src/oven_app.c ../Core/Inc/oven_app.h \
 ../Core/Inc/buzzer.h:
 ../Core/Inc/main.h:
 ../Core/Inc/st7789.h:
+../Core/Inc/oven_profile.h:

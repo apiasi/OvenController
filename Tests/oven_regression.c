@@ -1,6 +1,7 @@
 /* Executa o codigo ARM da aplicacao com perifericos simulados. */
 #include "../Core/Src/main.c"
 #include "../Core/Src/oven_app.c"
+#include "../Core/Src/oven_profile.c"
 #include "../Core/Src/st7789.c"
 #include "../Core/Src/max6675.c"
 #include "../Core/Src/stm32f1xx_it.c"
@@ -71,8 +72,12 @@ void HAL_GPIO_WritePin(GPIO_TypeDef *port, uint16_t pin, GPIO_PinState state) {
 HAL_StatusTypeDef HAL_TIM_Encoder_Start(TIM_HandleTypeDef *timer, uint32_t channel) {
     (void)timer; (void)channel; return HAL_OK;
 }
+__attribute__((noinline, noclone))
 HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *spi, const uint8_t *data,
                                   uint16_t size, uint32_t timeout) {
+    /* O observador SPI do emulador precisa dos bytes, mesmo que o mock nao
+     * os consuma em C. Impede a eliminacao interprocedural dos buffers. */
+    __asm volatile("" : : "r"(data) : "memory");
     (void)spi; (void)data; (void)size;
     displayTransfers++;
 #ifdef OVEN_TEST_REAL_UI
@@ -129,6 +134,9 @@ static void resetTest(void) {
     htim4.Instance = TIM4;
     TIM4->CNT = 0U;
     OvenApp_Init();
+    /* A regressao historica continua exercitando o modo constante. */
+    oven.profileId = OVEN_PROFILE_MANUAL;
+    oven.selectedField = OVEN_FIELD_TEMPERATURE;
     OvenApp_Process();
 }
 
@@ -334,6 +342,261 @@ void test_start(void) {
     while (1) {}
 }
 
+
+static void ReflowTestInit(void) {
+    resetTest();
+    oven.profileId = OVEN_PROFILE_SN63;
+    oven.selectedField = OVEN_FIELD_PROFILE;
+    OvenProfile_Load(oven.profileId, oven.points);
+    oven.profileTotalSeconds = OvenProfile_Duration(oven.points);
+}
+
+void profile_test_start(void) {
+    float target;
+    uint8_t point;
+    bool hold;
+    uint32_t remaining;
+    ReflowTestInit();
+    CHECK(OvenProfile_Validate(oven.points));
+    CHECK(OvenProfile_Duration(oven.points) == 285U);
+    CHECK(OvenProfile_Evaluate(oven.points, 25.0f, 45000U, &target, &point, &hold, &remaining));
+    CHECK(target == 72.5f && point == 0U && !hold && remaining == 45U);
+    CHECK(OvenProfile_Evaluate(oven.points, 25.0f, 150000U, &target, &point, &hold, &remaining));
+    CHECK(target == 150.0f && point == 1U && hold && remaining == 45U);
+    CHECK(!OvenProfile_Evaluate(oven.points, 25.0f, 285000U, &target, &point, &hold, &remaining));
+    CHECK(target == 210.0f && remaining == 0U);
+    Oven_StartCycle();
+    CHECK(oven.state == OVEN_STATE_RUNNING && !oven.heaterOn);
+    uint32_t start = testTick;
+    /* Planta ideal: comprova limites de etapas, rampas e permanencias. */
+    for (unsigned second = 1U; second <= 285U; second++) {
+        testTick = start + second * 1000U;
+        (void)OvenProfile_Evaluate(oven.points, 25.0f, second * 1000U,
+            &target, &point, &hold, &remaining);
+        oven.currentTempC = target;
+        lastValidSensorTick = testTick;
+        ProcessControl(testTick);
+        CHECK(oven.state != OVEN_STATE_ERROR);
+    }
+    CHECK(oven.state == OVEN_STATE_COOLING && !oven.heaterOn);
+    CHECK(oven.traceCount > 1U && oven.traceCount <= OVEN_TRACE_CAPACITY);
+    oven.currentTempC = 61.0f;
+    lastValidSensorTick = testTick;
+    ProcessControl(testTick);
+    CHECK(oven.state == OVEN_STATE_COOLING && !oven.heaterOn);
+    oven.currentTempC = 60.0f;
+    ProcessControl(testTick);
+    CHECK(oven.state == OVEN_STATE_FINISHED && !oven.heaterOn);
+
+    ReflowTestInit();
+    oven.currentTempC = 51.0f;
+    Oven_StartCycle();
+    CHECK(oven.error == OVEN_ERROR_START_HOT && !oven.heaterOn);
+
+    ReflowTestInit();
+    Oven_StartCycle();
+    oven.currentTempC = 226.0f;
+    ProcessControl(testTick);
+    CHECK(oven.error == OVEN_ERROR_TRACKING && !oven.heaterOn);
+
+    ReflowTestInit();
+    oven.points[0].rampSeconds = 0U;
+    Oven_StartCycle();
+    CHECK(oven.error == OVEN_ERROR_PROFILE && !oven.heaterOn);
+
+    ReflowTestInit();
+    Oven_StartCycle();
+    testTick += 90000U;
+    lastValidSensorTick = testTick;
+    ProcessControl(testTick);
+    CHECK(oven.error == OVEN_ERROR_TRACKING && !oven.heaterOn);
+
+    ReflowTestInit();
+    Oven_StartCycle();
+    oven.state = OVEN_STATE_COOLING;
+    coolingStartTick = testTick;
+    oven.currentTempC = 100.0f;
+    testTick += OVEN_COOL_TIMEOUT_MS;
+    lastValidSensorTick = testTick;
+    ProcessControl(testTick);
+    CHECK(oven.error == OVEN_ERROR_COOLING_TIMEOUT && !oven.heaterOn);
+
+    ReflowTestInit();
+    Oven_StartCycle();
+    oven.state = OVEN_STATE_COOLING;
+    sensorWord = 4U;
+    testTick += OVEN_SENSOR_PERIOD_MS;
+    ProcessRealtime();
+    CHECK(oven.error == OVEN_ERROR_SENSOR && !oven.heaterOn);
+
+    ReflowTestInit();
+    Oven_StartCycle();
+    keyK0Button.pressEvent = true;
+    ProcessButtons();
+    CHECK(oven.state == OVEN_STATE_IDLE && !oven.heaterOn);
+
+    ReflowTestInit();
+    encPushButton.pressEvent = true;
+    ProcessButtons();
+    CHECK(oven.screen == OVEN_SCREEN_EDITOR && oven.editCell == 0U);
+    AdjustConfiguration(1);
+    CHECK(oven.profileId == OVEN_PROFILE_CUSTOM && oven.points[0].targetC == 121U);
+    oven.screen = OVEN_SCREEN_HOME;
+    oven.selectedField = OVEN_FIELD_PROFILE;
+    AdjustConfiguration(-2);
+    CHECK(oven.profileId == OVEN_PROFILE_SN63 && oven.points[0].targetC == 120U);
+    AdjustConfiguration(2);
+    CHECK(oven.profileId == OVEN_PROFILE_CUSTOM && oven.points[0].targetC == 121U);
+    AdjustConfiguration(-3);
+    CHECK(oven.profileId == OVEN_PROFILE_MANUAL);
+    oven.setpointC = 40U;
+    oven.setTimeMin = 180U;
+    Oven_StartCycle();
+    CHECK(oven.state == OVEN_STATE_HEATING);
+    oven.currentTempC = 40.0f;
+    ProcessControl(testTick);
+    CHECK(oven.state == OVEN_STATE_RUNNING && oven.remainingSeconds == 10800U);
+
+    ReflowTestInit();
+    oven.points[1].targetC = 100U;
+    Oven_StartCycle();
+    checkedPoints = 1U;
+    testTick += 100000U;
+    lastValidSensorTick = testTick;
+    oven.currentTempC = 90.0f;
+    ProcessControl(testTick);
+    CHECK(oven.activePoint == 1U && !oven.holding && !oven.heaterOn);
+
+    ReflowTestInit();
+    oven.screen = OVEN_SCREEN_EDITOR;
+    oven.editCell = 0U;
+    AdjustConfiguration(-1000);
+    CHECK(oven.points[0].targetC == OVEN_SETPOINT_MIN_C);
+    AdjustConfiguration(1000);
+    CHECK(oven.points[0].targetC == OVEN_SETPOINT_MAX_C);
+    oven.editCell = 1U;
+    AdjustConfiguration(-1000);
+    CHECK(oven.points[0].rampSeconds == OVEN_PROFILE_RAMP_MIN_S);
+    oven.editCell = 2U;
+    AdjustConfiguration(-1000);
+    CHECK(oven.points[0].holdSeconds == 0U);
+    oven.editCell = 0U;
+    for (unsigned i = 0; i < 12U; i++) {
+        encPushButton.pressEvent = true;
+        ProcessButtons();
+    }
+    CHECK(oven.screen == OVEN_SCREEN_HOME && oven.selectedField == OVEN_FIELD_PROFILE);
+    encPushButton.pressEvent = true;
+    ProcessButtons();
+    CHECK(oven.screen == OVEN_SCREEN_EDITOR);
+    encPushButton.stablePressed = true;
+    pushPressedTick = testTick;
+    pushLongHandled = false;
+    testTick += OVEN_PUSH_LONG_MS;
+    ProcessLongPush(testTick);
+    CHECK(oven.screen == OVEN_SCREEN_HOME && oven.selectedField == OVEN_FIELD_PROFILE);
+
+    ReflowTestInit();
+    testTick = UINT32_MAX - 10000U;
+    lastValidSensorTick = testTick;
+    Oven_StartCycle();
+    testTick += 20000U;
+    lastValidSensorTick = testTick;
+    ProcessControl(testTick);
+    CHECK(oven.state == OVEN_STATE_RUNNING && oven.elapsedSeconds == 20U);
+    testCompleted = 1U;
+    __asm volatile("bkpt #0");
+    while (1) {}
+}
+
+#ifdef OVEN_TEST_REAL_UI
+volatile unsigned previewId;
+void preview_start(void) {
+    resetTest();
+    ST7789_SetServiceCallback(NULL);
+    OvenStatus_t s = oven;
+    s.profileId = OVEN_PROFILE_SN63;
+    s.selectedField = OVEN_FIELD_PROFILE;
+    s.currentTempC = 26.5f;
+    s.sensorValid = true;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 1U; __asm volatile("bkpt #0");
+
+    s.screen = OVEN_SCREEN_EDITOR;
+    s.editCell = 4U;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 2U; __asm volatile("bkpt #0");
+
+    s.screen = OVEN_SCREEN_HOME;
+    s.state = OVEN_STATE_RUNNING;
+    s.currentTempC = 174.5f;
+    s.targetTempC = 183.0f;
+    s.activePoint = 2U;
+    s.elapsedSeconds = 210U;
+    s.remainingSeconds = 15U;
+    s.heaterOn = true;
+    s.profileStartTempC = 25.0f;
+    s.traceCount = 24U;
+    for (unsigned i = 0; i < s.traceCount; i++) {
+        float target;
+        uint8_t point;
+        bool holding;
+        uint32_t remaining;
+        s.traceTime[i] = (uint16_t)(i * 9U);
+        (void)OvenProfile_Evaluate(s.points, 25.0f, i * 9000U,
+            &target, &point, &holding, &remaining);
+        s.traceTemp[i] = (uint16_t)(target - (i > 0U ? 5.0f : 0.0f));
+    }
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 3U; __asm volatile("bkpt #0");
+
+    s.state = OVEN_STATE_COOLING;
+    s.elapsedSeconds = 330U;
+    s.currentTempC = 174.0f;
+    s.heaterOn = false;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 4U; __asm volatile("bkpt #0");
+
+    s.state = OVEN_STATE_IDLE;
+    s.profileId = OVEN_PROFILE_MANUAL;
+    s.currentTempC = 26.5f;
+    s.setpointC = 45U;
+    s.setTimeMin = 120U;
+    s.selectedField = OVEN_FIELD_TEMPERATURE;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 5U; __asm volatile("bkpt #0");
+
+    s.state = OVEN_STATE_HEATING;
+    s.currentTempC = 28.0f;
+    s.heaterOn = true;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 7U; __asm volatile("bkpt #0");
+
+    s.state = OVEN_STATE_RUNNING;
+    s.currentTempC = 45.0f;
+    s.remainingSeconds = 7190U;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 8U; __asm volatile("bkpt #0");
+
+    s.state = OVEN_STATE_ERROR;
+    s.heaterOn = false;
+    s.error = OVEN_ERROR_TRACKING;
+    OvenUI_Invalidate();
+    OvenUI_Render(&s);
+    previewId = 6U;
+    testCompleted = 1U;
+    __asm volatile("bkpt #0");
+    while (1) {}
+}
+#endif
+
 #ifdef OVEN_TEST_REAL_UI
 volatile unsigned measuredCardBytes;
 volatile unsigned measuredStartLatency;
@@ -359,9 +622,9 @@ void input_test_start(void) {
     measuredStartLatency = heaterTransitionTick - pressStart;
     CHECK(measuredStartLatency <= OVEN_BUTTON_DEBOUNCE_MS + 3U);
     CHECK(uiDirty && uiInvalid);
-    CHECK(lastState == OVEN_STATE_IDLE); /* Snapshot da tela que estava em curso. */
+    CHECK(last.state == OVEN_STATE_IDLE); /* Snapshot da tela que estava em curso. */
     ProcessUi(testTick);
-    CHECK(lastState == OVEN_STATE_HEATING);
+    CHECK(last.state == OVEN_STATE_HEATING);
 
     resetTest();
     Oven_StartCycle();
@@ -371,14 +634,14 @@ void input_test_start(void) {
     CHECK(measuredStopLatency <= OVEN_BUTTON_DEBOUNCE_MS + 3U);
     CHECK(uiDirty && uiInvalid);
     ProcessUi(testTick);
-    CHECK(lastState == OVEN_STATE_IDLE);
+    CHECK(last.state == OVEN_STATE_IDLE);
 
     resetTest();
     DrawWithInput(ENC_PUSH_Pin);
     CHECK(oven.selectedField == OVEN_FIELD_TIME);
-    CHECK(uiDirty && lastField == OVEN_FIELD_TEMPERATURE);
+    CHECK(uiDirty && last.selectedField == OVEN_FIELD_TEMPERATURE);
     ProcessUi(testTick);
-    CHECK(lastField == OVEN_FIELD_TIME);
+    CHECK(last.selectedField == OVEN_FIELD_TIME);
 
     resetTest();
     simulateEncoder = true;
@@ -390,7 +653,7 @@ void input_test_start(void) {
     CHECK(oven.setpointC == OVEN_DEFAULT_SETPOINT_C + 10U);
     CHECK(uiDirty);
     ProcessUi(testTick);
-    CHECK(lastSetpoint == oven.setpointC);
+    CHECK(last.setpointC == oven.setpointC);
 
     resetTest();
     Oven_StartCycle();
@@ -408,7 +671,24 @@ void input_test_start(void) {
     OvenStatus_t snapshot = oven;
     OvenUI_Render(&snapshot);
     measuredCardBytes = displayBytes - before;
-    CHECK(measuredCardBytes > 0U && measuredCardBytes < 3000U);
+    CHECK(measuredCardBytes > 0U && measuredCardBytes < 6000U);
+
+    ReflowTestInit();
+    DrawWithInput(KEY_K0_Pin);
+    CHECK(oven.state == OVEN_STATE_RUNNING && oven.profileId == OVEN_PROFILE_SN63);
+    CHECK(uiDirty && uiInvalid);
+
+    ReflowTestInit();
+    Oven_StartCycle();
+    Heater_Set(true);
+    DrawWithInput(KEY_K0_Pin);
+    CHECK(oven.state == OVEN_STATE_IDLE && !oven.heaterOn);
+    CHECK(heaterTransitionTick - pressStart <= OVEN_BUTTON_DEBOUNCE_MS + 3U);
+
+    ReflowTestInit();
+    DrawWithInput(ENC_PUSH_Pin);
+    CHECK(oven.screen == OVEN_SCREEN_EDITOR && oven.editCell == 0U);
+    CHECK(uiDirty);
 
     /* Confere os pixels produzidos pela nova expansao da fonte. */
     ST7789_SetServiceCallback(NULL);

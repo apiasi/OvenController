@@ -1,0 +1,83 @@
+OVENCONTROLLER 4.0.0 - PERFIS DE REFLOW E NOVA INTERFACE
+Data: 21/11/2026
+
+FUNCIONALIDADE
+
+- Preservado o modo Manual / Secagem com temperatura constante, 30-250 C,
+  duracao de 1-180 minutos e inicio da contagem somente ao atingir o alvo.
+- Acrescentados Sn63/Pb37, Sn62/Pb36/Ag2 e Personalizado. Nao ha preset sem chumbo.
+- Quatro pontos por perfil: temperatura alvo, tempo de rampa e permanencia.
+- Referencia interpolada linearmente em cada rampa, seguida da permanencia.
+- Editar um preset cria uma copia Personalizado; presets originais preservados.
+- Ajustes e copia personalizada mantidos apenas na RAM da sessao.
+- SSR desligado nas rampas descendentes e durante resfriamento passivo.
+- Estado COOLING acompanha a leitura ate 60 C; limite de 30 minutos.
+- Reflow inicia somente com leitura valida, recente e temperatura de ate 50 C.
+- Desvio maior que +/-15 C no final de cada ponto interrompe o ciclo.
+- Temperatura acima do maior alvo +15 C tambem interrompe o ciclo.
+- Preservados os cortes globais, sensor, watchdog e falha retida do display.
+
+NAVEGACAO E TELA
+
+- Gire no seletor para escolher Manual, Sn63, Sn62 ou Personalizado.
+- No Manual: PUSH alterna perfil, temperatura e duracao.
+- No Reflow: PUSH abre o editor. Gire ajusta a celula; PUSH avanca.
+- Segurar PUSH por aproximadamente 700 ms volta ao seletor.
+- K0 inicia em configuracao e interrompe em execucao ou resfriamento.
+- Painel com cores consistentes, tipografia hierarquizada e unidades explicitas.
+- Grafico da curva programada em ciano e amostras medidas em ambar.
+- Cursor de tempo, etapa ativa e indicacao de rampa/permanencia e SSR.
+- Linha de resfriamento pontilhada e apenas uma ilustracao, sem controle ativo.
+- Cache, snapshots e callback cooperativo preservam atendimento das entradas
+  durante os desenhos; debounce continua em 25 ms e periodo minimo da UI em 40 ms.
+
+LIMITES DA IMPLEMENTACAO
+
+- Controle ON/OFF com histerese; sem PID ou ajuste automatico da inercia termica.
+- Os presets sao exemplos iniciais para qualificacao. As temperaturas de pico
+  sao 210 C para Sn63 e 205 C para Sn62; programa de 4 min 45 s em ambos.
+- A referencia de consulta e o guia Kester R500 (pagina 3), que trata o perfil
+  como uma orientacao dependente da pasta, forno e placa. Os quatro pontos do
+  software sao escolhas iniciais de engenharia, nao uma transcricao certificada.
+  Link da fonte no README.md. Conferir a ficha tecnica da pasta utilizada.
+- Qualificar a curva medida na placa, o pico e tempo acima de liquidus.
+  A leitura no ar do forno pode diferir da temperatura da junta.
+- Nao ha ventilador/porta controlados pelo firmware. Resfriamento e passivo.
+- Concluir o ciclo nao equivale a certificar soldagem ou indicar toque seguro.
+- O grafico comporta 64 amostras e usa eixo termico fixo de 0 a 250 C.
+
+VALIDACAO AUTOMATICA
+
+- Compilacao e linkagem Debug/Release, com oven_profile.c incluido em ambas.
+- Analise estatica GCC com -fanalyzer, -Wall e -Wextra em todos os C de Core/Src.
+- Regressao do modo constante, protecoes e seis handlers de falha.
+- Testes de interpolacao, quatro etapas, patamares, limite de inicio quente,
+  perfil invalido, desvio termico, excesso relativo ao pico e resfriamento.
+- Testes de parada, erro do sensor durante resfriamento, contador de tempo
+  passando por zero, edicao/clamps e preservacao dos presets e modo Secagem.
+- Integracao com UI e buzzer reais, SPI simulado, encoder/PUSH/K0 durante
+  redesenhos tanto em Manual quanto em Reflow.
+- Seis PNGs reconstruidos dos comandos SPI do driver real emulado,
+  inspecionados visualmente: Tests/previews/.
+
+RESULTADOS DESTA REVISAO
+
+- Regressao: 46 verificacoes; integracao de entradas/UI: 5306 verificacoes,
+  incluindo a comparacao de pixels da fonte; perfis/editor: 321 verificacoes.
+- Os seis handlers de falha passaram nos tres cenarios de testes.
+- No modelo SPI, START/STOP manual foram aceitos em 25 ms durante desenhos.
+  Esse valor nao inclui os ciclos reais da CPU nem ruido/interrupcoes da placa.
+- Release: 20844 bytes de Flash; Debug: 31472 bytes de Flash.
+- Ha margem dentro dos 64 KB de Flash e 20 KB de RAM configurados.
+
+BANCADA PENDENTE
+
+1. Conferir seletor, editor, retorno por PUSH longo e resposta do K0.
+2. Repetir secagem em baixa temperatura e validar duracao e corte ao terminar.
+3. Qualificar o perfil de reflow com medicao na placa e ficha da pasta.
+4. Ajustar tempos de rampa/permanencia a potencia e inercia reais do forno.
+5. Confirmar corte por desvio e por excesso de pico, sem deixar o forno sozinho.
+6. Conferir resfriamento passivo, leitura ate 60 C e corte de todos os atuadores.
+7. Repetir testes de falha do termopar, watchdog e estado seguro de PB0.
+
+Nenhuma gravacao ou acionamento do equipamento foi realizado.

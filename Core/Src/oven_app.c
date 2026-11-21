@@ -5,6 +5,7 @@
 #include "buzzer.h"
 #include "main.h"
 #include "st7789.h"
+#include "oven_profile.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -34,6 +35,11 @@ static DebouncedButton_t encPushButton;
 static DebouncedButton_t keyK0Button;
 
 static bool uiDirty;
+static OvenProfilePoint_t customPoints[OVEN_PROFILE_POINT_COUNT];
+static uint32_t coolingStartTick;
+static uint32_t pushPressedTick;
+static bool pushLongHandled;
+static uint8_t checkedPoints;
 
 static void ProcessRealtime(void);
 
@@ -81,7 +87,7 @@ static bool Button_GetPressEvent(DebouncedButton_t *button) {
 
 static bool Oven_IsActive(void) {
 	return (oven.state == OVEN_STATE_HEATING)
-			|| (oven.state == OVEN_STATE_RUNNING);
+			|| (oven.state == OVEN_STATE_RUNNING) || (oven.state == OVEN_STATE_COOLING);
 }
 
 static void Heater_Set(bool on) {
@@ -113,6 +119,8 @@ static void Oven_EnterIdle(void) {
 	Heater_OffImmediate();
 	oven.state = OVEN_STATE_IDLE;
 	oven.error = OVEN_ERROR_NONE;
+	oven.screen = OVEN_SCREEN_HOME;
+	encoderAccumulator = 0;
 	oven.remainingSeconds = (uint32_t) oven.setTimeMin * 60U;
 	uiDirty = true;
 	OvenUI_Invalidate();
@@ -154,13 +162,34 @@ static void Oven_StartCycle(void) {
 		Oven_EnterError(OVEN_ERROR_OVERTEMP);
 		return;
 	}
+	if (oven.profileId != OVEN_PROFILE_MANUAL) {
+		if (!OvenProfile_Validate(oven.points)) {
+			Oven_EnterError(OVEN_ERROR_PROFILE);
+			return;
+		}
+		if (oven.currentTempC > OVEN_PROFILE_START_MAX_C) {
+			Oven_EnterError(OVEN_ERROR_START_HOT);
+			return;
+		}
+	}
 
-	oven.state = OVEN_STATE_HEATING;
+	oven.state = oven.profileId == OVEN_PROFILE_MANUAL ? OVEN_STATE_HEATING : OVEN_STATE_RUNNING;
+	oven.screen = OVEN_SCREEN_HOME;
+	oven.elapsedSeconds = 0U;
+	oven.activePoint = 0U;
+	oven.holding = false;
+	oven.traceCount = 0U;
+	oven.profileStartTempC = oven.currentTempC;
+	oven.targetTempC = oven.profileId == OVEN_PROFILE_MANUAL ? (float)oven.setpointC : oven.currentTempC;
+	oven.profileTotalSeconds = OvenProfile_Duration(oven.points);
+	cycleStartTick = HAL_GetTick();
+	checkedPoints = 0U;
+	encoderAccumulator = 0;
 	heatingStartTick = HAL_GetTick();
 	oven.error = OVEN_ERROR_NONE;
 	oven.remainingSeconds = (uint32_t) oven.setTimeMin * 60U;
 	/* Forno ja quente nao recebe um pulso de aquecimento ao iniciar. */
-	Heater_Set(oven.currentTempC < (float)oven.setpointC);
+	Heater_Set(oven.profileId == OVEN_PROFILE_MANUAL && oven.currentTempC < (float)oven.setpointC);
 	uiDirty = true;
 	OvenUI_Invalidate();
 	Buzzer_StartCycle();
@@ -256,6 +285,47 @@ static void AdjustConfiguration(int32_t steps) {
 	if ((steps == 0) || (oven.state != OVEN_STATE_IDLE)) {
 		return;
 	}
+	if (oven.screen == OVEN_SCREEN_EDITOR) {
+		uint8_t row = oven.editCell / 3U;
+		uint8_t column = oven.editCell % 3U;
+		uint16_t *field = column == 0U ? &oven.points[row].targetC :
+			(column == 1U ? &oven.points[row].rampSeconds : &oven.points[row].holdSeconds);
+		int32_t minimum = column == 0U ? OVEN_SETPOINT_MIN_C :
+			(column == 1U ? OVEN_PROFILE_RAMP_MIN_S : 0U);
+		int32_t maximum = column == 0U ? OVEN_SETPOINT_MAX_C :
+			(column == 1U ? OVEN_PROFILE_RAMP_MAX_S : OVEN_PROFILE_HOLD_MAX_S);
+		value = (int32_t)*field + steps;
+		if (value < minimum) { value = minimum; }
+		if (value > maximum) { value = maximum; }
+		if ((uint16_t)value != *field) {
+			*field = (uint16_t)value;
+			oven.profileId = OVEN_PROFILE_CUSTOM;
+			for (unsigned i = 0; i < OVEN_PROFILE_POINT_COUNT; i++) { customPoints[i] = oven.points[i]; }
+			oven.profileTotalSeconds = OvenProfile_Duration(oven.points);
+			oven.traceCount = 0U;
+			oven.elapsedSeconds = 0U;
+			uiDirty = true;
+			Buzzer_Click();
+		}
+		return;
+	}
+	if (oven.selectedField == OVEN_FIELD_PROFILE) {
+		value = (int32_t)oven.profileId + steps;
+		if (value < 0) { value = 0; }
+		if (value >= OVEN_PROFILE_COUNT) { value = OVEN_PROFILE_COUNT - 1; }
+		if ((OvenProfileId_t)value != oven.profileId) {
+			oven.profileId = (OvenProfileId_t)value;
+			oven.traceCount = 0U;
+			oven.elapsedSeconds = 0U;
+			if (oven.profileId == OVEN_PROFILE_CUSTOM) {
+				for (unsigned i = 0; i < OVEN_PROFILE_POINT_COUNT; i++) { oven.points[i] = customPoints[i]; }
+			} else { OvenProfile_Load(oven.profileId, oven.points); }
+			oven.profileTotalSeconds = OvenProfile_Duration(oven.points);
+			uiDirty = true;
+			Buzzer_Click();
+		}
+		return;
+	}
 
 	if (oven.selectedField == OVEN_FIELD_TEMPERATURE) {
 		value = (int32_t) oven.setpointC + steps;
@@ -299,9 +369,19 @@ static void ProcessButtons(void) {
 		if (oven.state == OVEN_STATE_IDLE) {
 			/* Nao leva uma fracao de detent do campo anterior para o novo. */
 			encoderAccumulator = 0;
-			oven.selectedField =
-					(oven.selectedField == OVEN_FIELD_TEMPERATURE) ?
-							OVEN_FIELD_TIME : OVEN_FIELD_TEMPERATURE;
+			if (oven.screen == OVEN_SCREEN_EDITOR) {
+				oven.editCell++;
+				if (oven.editCell >= OVEN_PROFILE_POINT_COUNT * 3U) {
+					oven.screen = OVEN_SCREEN_HOME;
+					oven.selectedField = OVEN_FIELD_PROFILE;
+				}
+			} else if (oven.profileId != OVEN_PROFILE_MANUAL) {
+				oven.screen = OVEN_SCREEN_EDITOR;
+				oven.editCell = 0U;
+			} else {
+				oven.selectedField = oven.selectedField == OVEN_FIELD_PROFILE ? OVEN_FIELD_TEMPERATURE :
+					(oven.selectedField == OVEN_FIELD_TEMPERATURE ? OVEN_FIELD_TIME : OVEN_FIELD_PROFILE);
+			}
 
 			Buzzer_Confirm();
 			uiDirty = true;
@@ -323,6 +403,7 @@ static void ProcessButtons(void) {
 
 	case OVEN_STATE_HEATING:
 	case OVEN_STATE_RUNNING:
+	case OVEN_STATE_COOLING:
 		Oven_StopCycle();
 		break;
 
@@ -349,6 +430,90 @@ static void ProcessButtons(void) {
 	}
 }
 
+static void ProcessLongPush(uint32_t now) {
+	if (!encPushButton.stablePressed) {
+		pushPressedTick = now;
+		pushLongHandled = false;
+	} else if (!pushLongHandled && (uint32_t)(now - pushPressedTick) >= OVEN_PUSH_LONG_MS) {
+		pushLongHandled = true;
+		if (oven.state == OVEN_STATE_IDLE) {
+			oven.screen = OVEN_SCREEN_HOME;
+			oven.selectedField = OVEN_FIELD_PROFILE;
+			encoderAccumulator = 0;
+			uiDirty = true;
+			Buzzer_Confirm();
+		}
+	}
+}
+
+static void RecordTrace(uint32_t now) {
+	if (oven.profileId == OVEN_PROFILE_MANUAL || !oven.sensorValid) { return; }
+	uint32_t elapsed = (now - cycleStartTick) / 1000U;
+	uint32_t interval = (oven.profileTotalSeconds + 120U + OVEN_TRACE_CAPACITY - 2U) /
+		(OVEN_TRACE_CAPACITY - 1U);
+	uint8_t n = oven.traceCount;
+	if (n != 0U && elapsed < oven.traceTime[n - 1U] + interval) { return; }
+	if (n == OVEN_TRACE_CAPACITY) { n--; } else { oven.traceCount++; }
+	oven.traceTime[n] = (uint16_t)elapsed;
+	oven.traceTemp[n] = (uint16_t)(oven.currentTempC + 0.5f);
+	uiDirty = true;
+}
+
+static void ProcessProfile(uint32_t now) {
+	uint32_t elapsed = now - cycleStartTick;
+	uint32_t boundary = 0U;
+	uint16_t peak = 0U;
+	for (unsigned i = 0U; i < OVEN_PROFILE_POINT_COUNT; i++) {
+		if (oven.points[i].targetC > peak) { peak = oven.points[i].targetC; }
+	}
+	if (oven.currentTempC > (float)peak + OVEN_PROFILE_TOLERANCE_C) {
+		Oven_EnterError(OVEN_ERROR_TRACKING);
+		return;
+	}
+	/* Nao declara ciclo conforme se o forno nao alcancou as etapas. */
+	for (uint8_t i = 0; i < OVEN_PROFILE_POINT_COUNT; i++) {
+		boundary += ((uint32_t)oven.points[i].rampSeconds + oven.points[i].holdSeconds) * 1000U;
+		if (i >= checkedPoints && elapsed >= boundary) {
+			float difference = oven.currentTempC - (float)oven.points[i].targetC;
+			if (difference > OVEN_PROFILE_TOLERANCE_C || difference < -OVEN_PROFILE_TOLERANCE_C) {
+				Oven_EnterError(OVEN_ERROR_TRACKING);
+				return;
+			}
+			checkedPoints = i + 1U;
+		}
+	}
+	uint32_t seconds = elapsed / 1000U;
+	float target;
+	uint8_t point;
+	bool holding;
+	uint32_t remaining;
+	bool running = OvenProfile_Evaluate(oven.points, oven.profileStartTempC,
+		elapsed, &target, &point, &holding, &remaining);
+	if (seconds != oven.elapsedSeconds || point != oven.activePoint || holding != oven.holding
+		|| (uint16_t)(target * 4.0f) != (uint16_t)(oven.targetTempC * 4.0f)) { uiDirty = true; }
+	oven.targetTempC = target;
+	oven.elapsedSeconds = seconds;
+	oven.activePoint = point;
+	oven.holding = holding;
+	oven.remainingSeconds = remaining;
+	RecordTrace(now);
+	if (!running) {
+		Heater_OffImmediate();
+		oven.state = OVEN_STATE_COOLING;
+		coolingStartTick = now;
+		uiDirty = true;
+		OvenUI_Invalidate();
+		Buzzer_Confirm();
+		return;
+	}
+	/* Uma rampa descendente nunca solicita aquecimento. */
+	float previous = point == 0U ? oven.profileStartTempC : (float)oven.points[point - 1U].targetC;
+	if (!holding && (float)oven.points[point].targetC < previous) {
+		Heater_OffImmediate();
+	} else if (oven.currentTempC <= target - OVEN_HYSTERESIS_C) { Heater_Set(true); }
+	else if (oven.currentTempC >= target + OVEN_HYSTERESIS_C) { Heater_Set(false); }
+}
+
 static void ProcessControl(uint32_t now) {
 	uint32_t durationMs;
 	uint32_t elapsedMs;
@@ -361,8 +526,8 @@ static void ProcessControl(uint32_t now) {
 		}
 		return;
 	}
-	if (Oven_IsActive() && (uint32_t)(now - lastValidSensorTick)
-			>= OVEN_SENSOR_STALE_MS) {
+	if (Oven_IsActive() && (!oven.sensorValid || (uint32_t)(now - lastValidSensorTick)
+			>= OVEN_SENSOR_STALE_MS)) {
 		oven.sensorValid = false;
 		Oven_EnterError(OVEN_ERROR_SENSOR);
 		return;
@@ -399,6 +564,10 @@ static void ProcessControl(uint32_t now) {
 		break;
 
 	case OVEN_STATE_RUNNING:
+		if (oven.profileId != OVEN_PROFILE_MANUAL) {
+			ProcessProfile(now);
+			break;
+		}
 		if (!oven.sensorValid) {
 			Oven_EnterError(OVEN_ERROR_SENSOR);
 			break;
@@ -427,6 +596,17 @@ static void ProcessControl(uint32_t now) {
 			Heater_Set(false);
 		}
 		/* Dentro da banda de histerese mantem o estado atual. */
+		break;
+
+	case OVEN_STATE_COOLING:
+		Heater_OffImmediate();
+		RecordTrace(now);
+		if (oven.elapsedSeconds != (now - cycleStartTick) / 1000U) { uiDirty = true; }
+		oven.elapsedSeconds = (now - cycleStartTick) / 1000U;
+		if (oven.currentTempC <= OVEN_COOL_TARGET_C) { Oven_FinishCycle(); }
+		else if ((uint32_t)(now - coolingStartTick) >= OVEN_COOL_TIMEOUT_MS) {
+			Oven_EnterError(OVEN_ERROR_COOLING_TIMEOUT);
+		}
 		break;
 
 	default:
@@ -475,6 +655,21 @@ void OvenApp_Init(void) {
 	oven.setpointC = OVEN_DEFAULT_SETPOINT_C;
 	oven.setTimeMin = OVEN_DEFAULT_TIME_MIN;
 	oven.remainingSeconds = (uint32_t) oven.setTimeMin * 60U;
+	oven.profileId = OVEN_PROFILE_SN63;
+	OvenProfile_Load(oven.profileId, oven.points);
+	OvenProfile_Load(OVEN_PROFILE_SN63, customPoints);
+	oven.profileTotalSeconds = OvenProfile_Duration(oven.points);
+	oven.screen = OVEN_SCREEN_HOME;
+	oven.selectedField = OVEN_FIELD_PROFILE;
+	oven.editCell = 0U;
+	oven.activePoint = 0U;
+	oven.holding = false;
+	oven.targetTempC = 0.0f;
+	oven.profileStartTempC = 25.0f;
+	oven.elapsedSeconds = 0U;
+	oven.traceCount = 0U;
+	pushPressedTick = now;
+	pushLongHandled = false;
 
 	lastSensorTick = now - OVEN_SENSOR_PERIOD_MS;
 	lastUiTick = now - OVEN_UI_PERIOD_MS;
@@ -525,6 +720,7 @@ static void ProcessRealtime(void) {
 	encoderSteps = ProcessEncoder();
 	AdjustConfiguration(encoderSteps);
 	ProcessButtons();
+	ProcessLongPush(HAL_GetTick());
 
 	/* Atualiza o relogio depois das operacoes SPI. */
 	ProcessControl(HAL_GetTick());

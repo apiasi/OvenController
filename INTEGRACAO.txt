@@ -1,25 +1,25 @@
-COMO USAR NO SEU PROJETO CUBEMX ATUAL
+OVENCONTROLLER 4.0.0 - INTEGRACAO E OPERACAO
 
-1. Faça backup do projeto atual.
-2. Copie os arquivos de Core/Inc para a pasta Core/Inc do projeto.
-3. Copie os arquivos de Core/Src para Core/Src do projeto.
-4. Preserve os demais arquivos gerados pelo CubeMX (stm32f1xx_it.c, stm32f1xx_hal_msp.c etc.).
-5. Faça Project > Clean e depois Build.
-6. Grave com o J-Link.
+O projeto CubeIDE inclui Core e Drivers como pastas de fontes.
+Ao integrar em outra copia do projeto, inclua Core/Inc e Core/Src completos,
+inclusive oven_profile.c e oven_profile.h. Preserve os arquivos gerados e
+as regioes USER CODE. Pinagem e perifericos continuam em OvenController.ioc.
 
-OPERACAO
-- Encoder: ajusta o valor selecionado.
-- PUSH: alterna TEMP/TEMPO.
-- K0 no IDLE: START.
-- K0 em HEATING/RUNNING: STOP apos debounce de 25 ms mais processamento.
-- K0 em FINISHED: volta para configuracao.
-- K0 em ERROR: tenta resetar apenas se o sensor estiver valido e a temperatura estiver segura.
+Compile Debug e Release. Pelo terminal, use explicitamente o alvo all:
+make -C Release all
+make -C Debug all
 
-IMPORTANTE
-- O tempo comeca somente quando a temperatura medida atinge o setpoint.
-- Depois disso o controle usa histerese de +/- 1,5 C.
-- Termopar aberto ou erro SPI durante o ciclo desliga o SSR ao detectar a falha.
-- Sobretemperatura desliga o SSR ao detectar a leitura acima do limite.
-- A leitura do sensor ocorre a cada 250 ms, acrescida do tempo do laco e SPI.
-- Revisao 3.1.0: consulte REVISAO_V3_1.txt para resposta das entradas e testes.
-- Watchdog e bloqueios de seguranca: historico em REVISAO_V3.txt.
+MODOS
+- Manual / Secagem: temperatura constante, 30-250 C, 1-180 minutos.
+  Tempo inicia somente ao atingir o alvo. PUSH alterna perfil/temp/tempo.
+- Reflow: Sn63/Pb37, Sn62/Pb36/Ag2 e Personalizado, com quatro pontos.
+  Cada ponto tem alvo, rampa em segundos e permanencia em segundos.
+  PUSH abre o editor/avanca; segurar PUSH volta ao seletor.
+- Gire para ajustar o campo selecionado. K0 inicia ou interrompe.
+- Ajustes ficam em RAM. Editar um preset cria a copia Personalizado.
+- Reflow exige inicio com ate 50 C e termina o aquecimento em resfriamento
+  passivo, com SSR desligado ate a leitura chegar a 60 C.
+- Presets sao exemplos iniciais e precisam ser qualificados na placa real.
+
+Consulte README.md para o guia completo e REVISAO_V4.txt para validacao.
+Nao foi realizada gravacao, reset da placa ou teste fisico nesta revisao.

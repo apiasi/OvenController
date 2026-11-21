@@ -155,6 +155,7 @@ void ST7789_DrawPixel(uint16_t x,
     data[0] = (uint8_t)(color >> 8);
     data[1] = (uint8_t)(color & 0xFF);
     ST7789_WriteData(data, 2);
+    ST7789_Service();
 }
 
 void ST7789_FillRect(uint16_t x,

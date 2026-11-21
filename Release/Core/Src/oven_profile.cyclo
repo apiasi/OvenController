@@ -1,0 +1,5 @@
+../Core/Src/oven_profile.c:12:13:OvenProfile_Name	2
+../Core/Src/oven_profile.c:22:6:OvenProfile_Load	2
+../Core/Src/oven_profile.c:27:10:OvenProfile_Duration	2
+../Core/Src/oven_profile.c:35:6:OvenProfile_Validate	5
+../Core/Src/oven_profile.c:45:6:OvenProfile_Evaluate	5
