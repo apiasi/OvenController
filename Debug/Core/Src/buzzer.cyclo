@@ -1,0 +1,11 @@
+../Core/Src/buzzer.c:15:13:Buzzer_SetOutput	1
+../Core/Src/buzzer.c:21:13:Buzzer_Play	2
+../Core/Src/buzzer.c:36:6:Buzzer_Init	1
+../Core/Src/buzzer.c:46:6:Buzzer_Stop	1
+../Core/Src/buzzer.c:53:6:Buzzer_Process	6
+../Core/Src/buzzer.c:87:6:Buzzer_Click	2
+../Core/Src/buzzer.c:94:6:Buzzer_Confirm	1
+../Core/Src/buzzer.c:98:6:Buzzer_StartCycle	1
+../Core/Src/buzzer.c:102:6:Buzzer_StopCycle	1
+../Core/Src/buzzer.c:106:6:Buzzer_FinishCycle	1
+../Core/Src/buzzer.c:110:6:Buzzer_Error	1

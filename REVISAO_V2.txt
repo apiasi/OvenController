@@ -1,0 +1,23 @@
+REVISAO V2 - Debounce e cintilacao
+
+1. Debounce dos botoes ENC_PUSH e K0 refeito por polling de estado estavel.
+   - Pressao precisa permanecer estavel por 60 ms.
+   - Liberacao tambem precisa permanecer estavel por 60 ms.
+   - Um botao mantido pressionado gera apenas um evento.
+   - Bounce nao consegue gerar START seguido de STOP sem uma liberacao estavel.
+
+2. A UI nao e mais redesenhada periodicamente quando nada mudou.
+   - ProcessUi() so chama OvenUI_Render() quando uiDirty=true.
+   - O tempo restante marca uiDirty apenas quando muda de segundo.
+   - Estado do SSR marca uiDirty apenas quando realmente muda.
+   - Temperatura marca uiDirty apenas quando a leitura muda.
+
+3. Troca de campo TEMP/TEMPO nao invalida mais a tela inteira.
+   - Apenas os cards de configuracao sao atualizados.
+
+4. Fonte ST7789 otimizada.
+   - Cada caractere e montado em buffer e enviado em uma unica transferencia SPI.
+   - Remove dezenas de FillRect por caractere e reduz a cintilacao.
+
+Os pinos PB8/PB9 podem permanecer configurados como GPIO_EXTI com pull-up no CubeMX.
+O callback EXTI nao decide mais os eventos de botao; a validacao e feita pelo polling.

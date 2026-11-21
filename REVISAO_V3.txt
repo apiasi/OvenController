@@ -1,0 +1,75 @@
+OvenController 3.0.0 - Revisao de falhas e supervisao
+Data: 21/11/2026
+
+ALTERACOES
+
+1. Corte do SSR por acesso direto aos registradores.
+   - PB0 e configurado como saida baixa logo no inicio de main().
+   - NMI, HardFault, MemManage, BusFault, UsageFault e Error_Handler
+     desligam o comando antes de entrar no laco de falha.
+   - A rotina nao depende de HAL_GetTick, interrupcoes ou SPI.
+
+2. Watchdog independente (IWDG).
+   - Iniciado antes da inicializacao do display.
+   - Prescaler 256 e reload 1249: aproximadamente 8 segundos a 40 kHz.
+   - O prazo real varia com a frequencia do oscilador LSI.
+   - Alimentado somente depois de completar uma passagem pela aplicacao.
+   - Reinicio por watchdog entra em ERROR, sem retomar o ciclo.
+   - K0 permite reconhecer o erro com sensor valido e temperatura segura.
+   - Em Debug, o watchdog e congelado enquanto o core estiver parado.
+
+3. SPI com esperas limitadas.
+   - Display: 10 ms por transferencia; sensor: 5 ms por leitura.
+   - Primeiro erro SPI do display desliga o SSR, retendo a falha ate reiniciar.
+   - Transferencias posteriores sao suprimidas; novos ciclos ficam bloqueados.
+   - SPI do display e unidirecional: desconexao fisica pode nao produzir erro HAL.
+   - Timeouts da HAL dependem do SysTick. Se ele parar, o watchdog e a defesa
+     contra travamento do processamento.
+
+4. Aquecimento supervisionado.
+   - Limite inicial de 30 minutos para atingir o alvo, configuravel em
+     OVEN_HEATING_TIMEOUT_MS. O limite precisa ser validado para o forno real.
+   - Ao exceder, desliga o SSR e informa TEMPO DE AQUECIMENTO / LIMITE EXCEDIDO.
+   - Uma leitura valida com idade igual ou superior a 1 segundo bloqueia
+     o aquecimento. O periodo normal de leitura continua em 250 ms.
+   - Iniciar com temperatura ja acima do alvo nao gera pulso no SSR.
+   - Relogio do controle atualizado depois das operacoes de comunicacao.
+
+5. Compilacao e comportamento preservado.
+   - Debug passou a incluir buzzer, MAX6675, aplicacao, UI e ST7789.
+   - Verificados retornos de inicializacao do encoder e do PWM do backlight.
+   - Ajustes continuam apenas em RAM; controle continua por histerese.
+   - Debounce mantido em 60 ms na pressao e na liberacao.
+   - K0 nao e parada instantanea: soma debounce, tempo do laco e comunicacoes.
+   - O temporizador continua contando depois de atingir o alvo, mesmo quando
+     a temperatura cai abaixo dele durante o ciclo.
+
+VALIDACAO AUTOMATICA
+
+Debug e Release compilados e linkados com GNU Tools for STM32 13.3.rel1.
+Sem erros ou avisos de compilacao.
+Testes em Tests/run_regression.py executam os fontes reais compilados para ARM,
+com HAL e perifericos simulados no Unicorn Cortex-M3.
+Cobrem: configuracao/alimentacao do watchdog, timeout de aquecimento,
+termopar aberto, timeout do sensor, leitura antiga, inicio com forno quente,
+histerese, fim de ciclo, sobretemperatura e reconhecimento do erro,
+timeout retido do display, bloqueio de novo ciclo, reinicio por watchdog,
+debounce do K0 e passagem do contador de milissegundos por UINT32_MAX.
+Os seis handlers de falha tambem sao executados e o corte de PB0 e verificado.
+Resultado desta revisao: 36 verificacoes e 6 handlers aprovados em emulacao.
+Release: 15848 bytes de Flash; Debug: 23940 bytes de Flash.
+RAM estatica (.data + .bss): 3296 bytes; reserva de heap/pilha: 1536 bytes.
+
+VALIDACAO DE BANCADA PENDENTE
+
+- Verificar PB0 baixo durante partida, reset e erros de inicializacao.
+- Medir resposta do K0 e falha do termopar durante redesenho completo da tela.
+- Confirmar corte com termopar aberto durante HEATING e RUNNING.
+- Confirmar fim de ciclo e controle nas duas bordas da histerese.
+- Testar prazo de aquecimento com limite reduzido em uma compilacao de teste;
+  restaurar o valor aprovado antes do uso normal.
+- Testar watchdog interrompendo a alimentacao por software, sem congelar o core;
+  medir o reset e conferir tela de falha e ausencia de retomada do aquecimento.
+- Conferir os alarmes e o reconhecimento pelo K0 na placa.
+
+Nenhuma gravacao ou teste em equipamento fisico foi realizado nesta revisao.

@@ -1,0 +1,24 @@
+COMO USAR NO SEU PROJETO CUBEMX ATUAL
+
+1. Faça backup do projeto atual.
+2. Copie os arquivos de Core/Inc para a pasta Core/Inc do projeto.
+3. Copie os arquivos de Core/Src para Core/Src do projeto.
+4. Preserve os demais arquivos gerados pelo CubeMX (stm32f1xx_it.c, stm32f1xx_hal_msp.c etc.).
+5. Faça Project > Clean e depois Build.
+6. Grave com o J-Link.
+
+OPERACAO
+- Encoder: ajusta o valor selecionado.
+- PUSH: alterna TEMP/TEMPO.
+- K0 no IDLE: START.
+- K0 em HEATING/RUNNING: STOP apos debounce de 60 ms mais processamento do laco.
+- K0 em FINISHED: volta para configuracao.
+- K0 em ERROR: tenta resetar apenas se o sensor estiver valido e a temperatura estiver segura.
+
+IMPORTANTE
+- O tempo comeca somente quando a temperatura medida atinge o setpoint.
+- Depois disso o controle usa histerese de +/- 1,5 C.
+- Termopar aberto ou erro SPI durante o ciclo desliga o SSR ao detectar a falha.
+- Sobretemperatura desliga o SSR ao detectar a leitura acima do limite.
+- A leitura do sensor ocorre a cada 250 ms, acrescida do tempo do laco e SPI.
+- Revisao 3.0.0: consulte REVISAO_V3.txt para watchdog e novos bloqueios.

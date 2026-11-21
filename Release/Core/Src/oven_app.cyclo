@@ -1,0 +1,9 @@
+../Core/Src/oven_app.c:99:13:Heater_OffImmediate	2
+../Core/Src/oven_app.c:52:13:Button_Process	5
+../Core/Src/oven_app.c:110:13:Oven_EnterIdle	1
+../Core/Src/oven_app.c:85:13:Heater_Set	2
+../Core/Src/oven_app.c:119:13:Oven_EnterError	3
+../Core/Src/oven_app.c:450:6:OvenApp_Init	4
+../Core/Src/oven_app.c:494:6:OvenApp_Process	49
+../Core/Src/oven_app.c:516:21:OvenApp_GetStatus	1
+../Core/Src/oven_app.c:524:6:HAL_GPIO_EXTI_Callback	1
